@@ -1,6 +1,8 @@
 # pyGLMdenoise
 python implementation of GLMdenoise
 
+[full documentation](http://glmdenoise.readthedocs.io/)
+
 
 ### Usage
 
