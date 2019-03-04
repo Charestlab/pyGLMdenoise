@@ -2,6 +2,9 @@
 GLMdenoise in python
 
 """
+from glmdenoise.utils.normalisemax import normalisemax
+from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
+
 
 def GLMdenoisedata(design,data,stimdur,tr,hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None):
 
@@ -13,7 +16,7 @@ def GLMdenoisedata(design,data,stimdur,tr,hrfmodel='optimise',hrfknobs=None,opt=
         if hrfmodel == 'fir':
             hrfknobs = 20
         else:
-            hrfknobs = normalizemax(getcanonicalhrf(stimdur,tr).T)
+            hrfknobs = normalisemax(getcanonicalhrf(stimdur,tr).T)
     
     if opt is None:
         opt = dict()
@@ -32,7 +35,7 @@ def GLMdenoisedata(design,data,stimdur,tr,hrfmodel='optimise',hrfknobs=None,opt=
     # reduce precision to single
     for p, dataset in enumerate(data):
         if not isinstance(dataset, np.float32):
-            print(f'***\n\n\n##########\n GLMdenoisedata: converting data in run {p} to single format (consider doing this before the function call to reduce memory usage). \n\n\n##########\n***\n')
+            print('***\n\n\n##########\n GLMdenoisedata: converting data in run {0} to single format (consider doing this before the function call to reduce memory usage). \n\n\n##########\n***\n'.format(p))
             data[p] = np.single(data[p])   
     
     # do some error checking
