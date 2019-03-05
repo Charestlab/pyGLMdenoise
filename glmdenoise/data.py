@@ -44,6 +44,11 @@ def GLMdenoisedata(design,data,stimdur,tr):
     ax.set_title('chosen number of regressors')
     ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
+    ## plot voxels for noise regressor selection
+    # if ~isequal(opt.pcR2cutoffmask,1)
+    #   imwrite(uint8(255*makeimagestack(opt.drawfunction(opt.pcR2cutoffmask),[0 1])),gray(256),fullfile(figuredir,'PCmask.png'));
+    # end
+
     
 
     ######################### DEAL WITH INPUTS, ETC.
