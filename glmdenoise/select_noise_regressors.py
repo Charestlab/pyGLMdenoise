@@ -27,5 +27,5 @@
 #     end
 #   end
 
-def select_noise_regressors():
-    pass
+def select_noise_regressors(r2_nrs, pcstop=1.05):
+    return 0
