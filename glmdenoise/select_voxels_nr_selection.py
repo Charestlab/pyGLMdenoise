@@ -18,5 +18,18 @@
 #   end
 #   xvaltrend = median(temp(pcvoxels,:),1);
 
-def select_voxels_nr_selection():
-    pass
+def select_voxels_nr_selection(r2_voxels_nrs, cutoff=0, mask=None):
+    """Chooses voxels for noise regressor selection
+    
+    Arguments:
+        r2_voxels_nrs {ndarray} -- R2 voxels by 1 + npcs
+    
+    Keyword Arguments:
+        cutoff {int} -- [description] (default: {0})
+        mask {[type]} -- [description] (default: {None})
+    
+    Returns:
+        ndarray -- one dimensional voxel mask (boolean)
+    """
+
+    return numpy.array([], dtype=bool)
