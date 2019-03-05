@@ -6,6 +6,7 @@ from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
 from glmdenoise.select_voxels_nr_selection import select_voxels_nr_selection
 from glmdenoise.select_noise_regressors import select_noise_regressors
+from glmdenoise.makeimagestack import makeimagestack
 import numpy, seaborn
 
 
@@ -45,10 +46,9 @@ def GLMdenoisedata(design,data,stimdur,tr):
     ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
     ## plot voxels for noise regressor selection
-    # if ~isequal(opt.pcR2cutoffmask,1)
-    #   imwrite(uint8(255*makeimagestack(opt.drawfunction(opt.pcR2cutoffmask),[0 1])),gray(256),fullfile(figuredir,'PCmask.png'));
-    # end
-
+    import matplotlib.pyplot as plt 
+    stack = makeimagestack(voxels_nr_selection.reshape(nx, ny, nz))
+    ax = plt.imshow(stack)
     
 
     ######################### DEAL WITH INPUTS, ETC.
