@@ -25,8 +25,8 @@ def select_voxels_nr_selection(r2_voxels_nrs, cutoff=0, mask=None):
         r2_voxels_nrs {ndarray} -- R2 voxels by 1 + npcs
     
     Keyword Arguments:
-        cutoff {int} -- [description] (default: {0})
-        mask {[type]} -- [description] (default: {None})
+        cutoff {int} -- Min R2 across solutions at which a voxel is selected (default: {0})
+        mask {ndarray} -- Optional mask of voxels to consider (default: {None})
     
     Returns:
         ndarray -- one dimensional voxel mask (boolean)
