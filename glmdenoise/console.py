@@ -1,4 +1,5 @@
 import argparse
+from glmdenoise import run_bids_directory
 
 
 def main():
@@ -16,5 +17,4 @@ def main():
     parser.add_argument('--task', default=None, 
         help='Task name. If not specified, will run on all tasks.')
     args = parser.parse_args()
-    print(args.directory)
-    print(args.subject)
+    run_bids_directory(args.directory, args.subject, args.task)
