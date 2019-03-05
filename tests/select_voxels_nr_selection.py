@@ -5,7 +5,7 @@ import numpy
 
 class VoxelsNoiseRegressorSelectionTest(TestCase):
 
-    def test_main_function_runs(self):
+    def test_select_without_mask(self):
         from glmdenoise.select_voxels_nr_selection import (
             select_voxels_nr_selection
         )

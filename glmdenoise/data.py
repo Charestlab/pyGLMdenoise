@@ -12,17 +12,29 @@ import numpy
 def GLMdenoisedata(design,data,stimdur,tr):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
 
-    # fake output from step 6 
+    ## fake output from step 6 
     nx, ny, nz, max_nregressors = 3, 4, 5, 20
     nvoxels = nx * ny * nz
     pcR2 = numpy.zeros([nx, ny, nz, max_nregressors])
 
+    ##########################################################################
     ## Step 7: Select number of noise regressors
+    ##########################################################################
+
+    ## remove spatial dimensions
     r2_voxels_nrs = pcR2.reshape([nvoxels, max_nregressors])
+
+    ## voxels to use to evaluate solutions
     voxels_nr_selection = select_voxels_nr_selection(r2_voxels_nrs)
+
+    ## get the median model fit across voxels we just chose
     r2_nrs = numpy.median(r2_voxels_nrs[voxels_nr_selection, :], 0)
+
+    ## evaluate the solutions
     n_noise_regressors = select_noise_regressors(r2_nrs)
     print(n_noise_regressors)
+
+    
 
     ######################### DEAL WITH INPUTS, ETC.
     
