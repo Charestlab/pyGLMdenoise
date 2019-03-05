@@ -12,7 +12,9 @@ def main():
     parser.add_argument('directory', nargs='?', default='.', 
         help='Data directory containing BIDS.')
     parser.add_argument('--subject', default=None, 
-        help='Subject number.')
+        help='Subject number. If not specified, will run for each subject.')
+    parser.add_argument('--task', default=None, 
+        help='Task name. If not specified, will run on all tasks.')
     args = parser.parse_args()
     print(args.directory)
     print(args.subject)
