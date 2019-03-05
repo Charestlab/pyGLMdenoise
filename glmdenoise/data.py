@@ -6,18 +6,19 @@ from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
 from glmdenoise.select_voxels_nr_selection import select_voxels_nr_selection
 from glmdenoise.select_noise_regressors import select_noise_regressors
-import numpy
+import numpy, seaborn
 
 
 def GLMdenoisedata(design,data,stimdur,tr):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
 
     ## fake output from step 6 
-    nx, ny, nz, max_nregressors = 3, 4, 5, 30
+    nx, ny, nz, max_nregressors = 3, 4, 5, 20
     nvoxels = nx * ny * nz
     brain = numpy.random.rand(nx, ny, nz) - 0.5
     pcR2 = numpy.repeat(brain[:,:,:, numpy.newaxis], max_nregressors, axis=3)
-    pcR2 = pcR2 * numpy.arange(1, max_nregressors+1)
+    nr_range = numpy.arange(1, max_nregressors+1)
+    pcR2 = pcR2 * (nr_range/(nr_range + 0.25))
 
     ##########################################################################
     ## Step 7: Select number of noise regressors
@@ -35,6 +36,13 @@ def GLMdenoisedata(design,data,stimdur,tr):
     ## evaluate the solutions
     n_noise_regressors = select_noise_regressors(r2_nrs)
     print(n_noise_regressors)
+
+    ## plot solutions
+    ax = seaborn.lineplot(data=r2_nrs)
+    ax.scatter(n_noise_regressors, r2_nrs[n_noise_regressors]) 
+    ax.set_xticks(range(max_nregressors))
+    ax.set_title('chosen number of regressors')
+    ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
     
 
