@@ -22,14 +22,14 @@ def select_voxels_nr_selection(r2_voxels_nrs, cutoff=0, mask=None):
     """Chooses voxels for noise regressor selection
     
     Arguments:
-        r2_voxels_nrs {ndarray} -- R2 voxels by 1 + npcs
+        r2_voxels_nrs (ndarray): R2 voxels by 1 + npcs
     
     Keyword Arguments:
-        cutoff {int} -- Min R2 across solutions at which a voxel is selected (default: {0})
-        mask {ndarray} -- Optional mask of voxels to consider (default: {None})
+        cutoff (int) -- Min R2 across solutions at which a voxel is selected (default: 0)
+        mask (ndarray): Optional mask of voxels to consider (default: None)
     
     Returns:
-        ndarray -- one dimensional voxel mask (boolean)
+        ndarray: one dimensional voxel mask (boolean)
     """
 
     return numpy.any(r2_voxels_nrs > cutoff, 1)
