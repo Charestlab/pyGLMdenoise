@@ -22,6 +22,7 @@ def GLMdenoisedata(design,data,stimdur,tr):
     voxels_nr_selection = select_voxels_nr_selection(r2_voxels_nrs)
     r2_nrs = numpy.median(r2_voxels_nrs[voxels_nr_selection, :], 0)
     n_noise_regressors = select_noise_regressors(r2_nrs)
+    print(n_noise_regressors)
 
     ######################### DEAL WITH INPUTS, ETC.
     

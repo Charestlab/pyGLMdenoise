@@ -1,4 +1,4 @@
-
+import numpy
 #   % prepare to select optimal number of PCs
 #   temp = squish(pcR2,dimdata);  % voxels x 1+pcs
 #   pcvoxels = any(temp > opt.pcR2cutoff,2) & squish(opt.pcR2cutoffmask,dimdata);  % if pcR2cutoffmask is 1, this still works
@@ -32,4 +32,4 @@ def select_voxels_nr_selection(r2_voxels_nrs, cutoff=0, mask=None):
         ndarray -- one dimensional voxel mask (boolean)
     """
 
-    return numpy.array([], dtype=bool)
+    return numpy.any(r2_voxels_nrs > cutoff, 1)
