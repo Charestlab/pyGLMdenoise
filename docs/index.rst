@@ -10,6 +10,8 @@ Welcome to glmdenoise's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   console
+
 
 
 Indices and tables
