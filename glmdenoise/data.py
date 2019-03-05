@@ -13,9 +13,11 @@ def GLMdenoisedata(design,data,stimdur,tr):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
 
     ## fake output from step 6 
-    nx, ny, nz, max_nregressors = 3, 4, 5, 20
+    nx, ny, nz, max_nregressors = 3, 4, 5, 30
     nvoxels = nx * ny * nz
-    pcR2 = numpy.zeros([nx, ny, nz, max_nregressors])
+    brain = numpy.random.rand(nx, ny, nz) - 0.5
+    pcR2 = numpy.repeat(brain[:,:,:, numpy.newaxis], max_nregressors, axis=3)
+    pcR2 = pcR2 * numpy.arange(1, max_nregressors+1)
 
     ##########################################################################
     ## Step 7: Select number of noise regressors
