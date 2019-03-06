@@ -19,26 +19,37 @@ class BidsDirectory(object):
             target='task'
         )
 
-    def get_filepaths_bold_runs(self, subject, task):
+    def get_sessions_for_task_and_subject(self, task, subject):
         return self.layout.get(
             subject=subject,
             task=task,
+            return_type='id',
+            target='session'
+        )
+
+    def get_filepaths_bold_runs(self, subject, task, session):
+        return self.layout.get(
+            subject=subject,
+            task=task,
+            session=session,
             suffix='preproc',
             return_type='file'
         )
 
-    def get_filepaths_event_runs(self, subject, task):
+    def get_filepaths_event_runs(self, subject, task, session):
         return self.layout.get(
             subject=subject,
             task=task,
+            session=session,
             suffix='events',
             return_type='file'
         )
 
-    def get_metas_bold_runs(self, subject, task):
+    def get_metas_bold_runs(self, subject, task, session):
         runs = self.layout.get(
             subject=subject,
             task=task,
+            session=session,
             suffix='bold'  # get metadata from raw!?
         )
         return [r.metadata for r in runs]

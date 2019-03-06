@@ -20,20 +20,24 @@ def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
     return run_bids(bids, sub_num=sub_num, sub=sub, task=task)
 
 
-def run_bids(bids, sub_num=None, sub=None, task=None):
-    if sub and task:
-        bold_files = bids.get_filepaths_bold_runs(sub, task)
+def run_bids(bids, sub_num=None, sub=None, task=None, ses=None):
+    if sub and task and ses:
+        bold_files = bids.get_filepaths_bold_runs(sub, task, ses)
         if not bold_files:
-            msg = 'No preprocessed runs found for subject {} task {}'
-            print(msg.format(sub, task))
+            msg = 'No preprocessed runs found for subject {} task {} session {}'
+            print(msg.format(sub, task, ses))
             return
-        event_files = bids.get_filepaths_event_runs(sub, task)
-        metas = bids.get_metas_bold_runs(sub, task)
+        event_files = bids.get_filepaths_event_runs(sub, task, ses)
+        metas = bids.get_metas_bold_runs(sub, task, ses)
         key = 'RepetitionTime'
         trs = [meta[key] for meta in metas if key in meta]
         assert trs, 'RepetitionTime not specified in metadata'
         assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
         return run_files(bold_files, event_files, tr=trs[0])
+    elif sub and task:
+        sessions = bids.get_sessions_for_task_and_subject(task, sub)
+        for ses in sessions:
+            run_bids(bids, sub=sub, task=task, ses=ses)
     elif sub:
         tasks = bids.get_tasks_for_subject(sub)
         for task in tasks:
