@@ -15,5 +15,16 @@ def run_bids(bids, sub_num=None, sub=None, task=None):
         trs = [meta['RepetitionTime'] for meta in metas]
         assert trs, 'RepetitionTime not specified in metadata'
         assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
-        run_files(bold_files, event_files, tr=trs[0])
-
+        return run_files(bold_files, event_files, tr=trs[0])
+    elif sub:
+        tasks = bids.get_tasks_for_subject(sub)
+        for task in tasks:
+            run_bids(bids, sub=sub, task=task)
+    elif sub_num:
+        sub = bids.subject_id_from_number(sub_num)
+        assert sub, 'Could not match subject index to a subject ID'
+        run_bids(bids, sub=sub)
+    else:
+        subs = bids.get_preprocessed_subjects_ids()
+        for sub in subs:
+            run_bids(bids, sub=sub)

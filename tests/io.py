@@ -17,11 +17,11 @@ class IOTest(TestCase):
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids)
             self.assertEquals(run_files.call_count, 3)
-            run_files.assert_called_with(
+            run_files.assert_any_call(
                 ('bld', '01', 'a'), ('evt', '01', 'a'), tr=2.2)
-            run_files.assert_called_with(
+            run_files.assert_any_call(
                 ('bld', '01', 'b'), ('evt', '01', 'b'), tr=2.2)
-            run_files.assert_called_with(
+            run_files.assert_any_call(
                 ('bld', '02', 'a'), ('evt', '02', 'a'), tr=2.2)
 
     def test_run_bids_subject_number(self):
@@ -36,9 +36,9 @@ class IOTest(TestCase):
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub_num=1)
             self.assertEquals(run_files.call_count, 2)
-            run_files.assert_called_with(
+            run_files.assert_any_call(
                 ('bld', '01', 'a'), ('evt', '01', 'a'), tr=2.2)
-            run_files.assert_called_with(
+            run_files.assert_any_call(
                 ('bld', '01', 'b'), ('evt', '01', 'b'), tr=2.2)
 
     def test_run_bids_subject_task(self):
