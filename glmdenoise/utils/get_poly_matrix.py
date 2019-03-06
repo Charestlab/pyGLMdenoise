@@ -1,16 +1,27 @@
-# temp = diag(1./len)*((X'*X)\X');
 from sklearn.preprocessing import normalize
 import numpy as np
 
 def make_project_matrix(X):
-    #X = normalize(X)
+    """ Calculates a projection matrix
+
+    Args:
+        X (array): design matrix
+
+    Returns:
+        array: Projection matrix size of X.shape[0] x X.shape[0]
+    """
     X = np.mat(X)
     return np.eye(X.shape[0]) - (X*(np.linalg.inv(X.T*X)*X.T))
 
 def get_poly_matrix(n, degrees):
-    """
-    n:  number of points
-    degrees: vector of polynomial degrees
+    """Calculates a matrix of polynomials used to regress them out of your data
+
+    Args:
+        n (int): number of points
+        degrees (array): vector of polynomial degrees
+
+    Returns:
+        array: Number of noise regressors to include
     """
     time_points = np.linspace(-1, 1, n)[np.newaxis].T
     polys = np.zeros((n, len(degrees)))
