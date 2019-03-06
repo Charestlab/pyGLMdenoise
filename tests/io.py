@@ -52,3 +52,16 @@ class IOTest(TestCase):
             self.assertEquals(run_files.call_count, 1)
             run_files.assert_called_with(
                 ('bld', '01', 'a'), ('evt', '01', 'a'), tr=2.2)
+
+    def test_run_bids_subject_separate_sessions(self):
+        from glmdenoise.io.directory import run_bids
+        bids = Mock()
+        bids.get_sessions_for_task_and_subject.return_value = ['1', '2']
+        bids.get_filepaths_bold_runs.side_effect = lambda s, t: ('bld', s, t)
+        bids.get_filepaths_event_runs.side_effect = lambda s, t: ('evt', s, t)
+        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        with patch('glmdenoise.io.directory.run_files') as run_files:
+            run_bids(bids, sub='01', task='a')
+            self.assertEquals(run_files.call_count, 1)
+            run_files.assert_called_with(
+                ('bld', '01', 'a'), ('evt', '01', 'a'), tr=2.2)
