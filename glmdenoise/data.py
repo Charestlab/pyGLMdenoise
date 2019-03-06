@@ -10,7 +10,7 @@ from glmdenoise.makeimagestack import makeimagestack
 import numpy, seaborn
 
 
-def GLMdenoisedata(design,data,stimdur,tr):
+def run_data(design, data, tr, stimdur=0.5):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
 
     ## fake output from step 6 
