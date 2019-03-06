@@ -19,7 +19,7 @@ class BidsDirectory(object):
         return self.layout.get(subject=subject, task=task, suffix='events', return_type='file')
 
     def get_metas_bold_runs(self, subject, task):
-        runs = self.layout.get(subject=subject, task=task, suffix='preproc')
+        runs = self.layout.get(subject=subject, task=task, suffix='bold') # get metadata from raw!?
         return [r.metadata for r in runs]
 
     def subject_id_from_number(self, sub_num):

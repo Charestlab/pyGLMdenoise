@@ -29,7 +29,8 @@ def run_bids(bids, sub_num=None, sub=None, task=None):
             return
         event_files = bids.get_filepaths_event_runs(sub, task)
         metas = bids.get_metas_bold_runs(sub, task)
-        trs = [meta['RepetitionTime'] for meta in metas]
+        key = 'RepetitionTime'
+        trs = [meta[key] for meta in metas if key in meta]
         assert trs, 'RepetitionTime not specified in metadata'
         assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
         return run_files(bold_files, event_files, tr=trs[0])
