@@ -1,4 +1,4 @@
 
 
-def run_files(bold, events):
+def run_files(bold, event, tr):
     pass
