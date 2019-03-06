@@ -3,6 +3,19 @@ from glmdenoise.io.bids import BidsDirectory
 
 
 def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
+    """Run glmdenoise on a whole or part of a dataset in a BIDS directory
+
+    Args:
+        directory (str, optional): Root data directory containing BIDS.
+            Defaults to '.'
+        sub_num (int, optional): Number of one subject to run. 
+            Defaults to None.
+        sub (string, optional): BIDS identifier of one subject to run. 
+            Defaults to None.
+        task (string, optional): Name of specific task to run. 
+            Defaults to None.
+    """
+
     bids = BidsDirectory(directory)
     return run_bids(bids, sub_num=sub_num, sub=sub, task=task)
 

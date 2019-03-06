@@ -6,15 +6,32 @@ Subpackages
 
 .. toctree::
 
+    glmdenoise.io
     glmdenoise.utils
 
 Submodules
 ----------
 
+glmdenoise.console module
+-------------------------
+
+.. automodule:: glmdenoise.console
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 glmdenoise.data module
 ----------------------
 
 .. automodule:: glmdenoise.data
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+glmdenoise.makeimagestack module
+--------------------------------
+
+.. automodule:: glmdenoise.makeimagestack
     :members:
     :undoc-members:
     :show-inheritance:
