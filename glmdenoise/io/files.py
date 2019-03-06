@@ -1,3 +1,4 @@
+from glmdenoise.data import run_data
 from pprint import pprint
 import nibabel
 import pandas
@@ -16,7 +17,4 @@ def run_files(bold_files, event_files, tr):
     assert len(bold_files) == len(event_files), msg
     data = [nibabel.load(f).get_data() for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
-    # print('## run_files ##')
-    # print('TR='+str(tr))
-    # pprint(bold_files)
-    # pprint(event_files)
+    run_data(data, design, tr)
