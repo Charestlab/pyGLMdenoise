@@ -30,10 +30,7 @@ plt.imshow(constructstimulusmatrices([[0, 1, 0, 0, 0, 0, 0, 0, 0,],
 """
 
 
-def constructStimulusMatrices(m,
-                              prenumlag=False,
-                              postnumlag=False,
-                              wantwrap=False):
+def constructStimulusMatrices(m, prenumlag=0, postnumlag=0, wantwrap=0):
     """construc stimulus matrices from design matrix m
 
     Args:
@@ -73,13 +70,13 @@ def constructStimulusMatrices(m,
 
         # do it
         num = prenumlag + postnumlag + 1
-        f = np.zeros((nvols, num*nconds))
-        for p, i in enumerate(range(nconds)):
-            thiscol = (i-1)*num + list(range(num))
-            f[:, thiscol] = constructStimulusMatrix(m[p, :],
-                                                    prenumlag,
-                                                    postnumlag,
-                                                    wantwrap)
+        f = np.zeros((nvols, num * nconds))
+        for p in range(nconds):
+            i = p + 1
+            thiscol = (i - 1) * num + np.array(range(num))
+            f[:, thiscol] = constructStimulusMatrix(
+                m[p, :], prenumlag, postnumlag, wantwrap
+            )
 
     return f
 
@@ -104,24 +101,22 @@ def constructStimulusMatrix(v, prenumlag, postnumlag, wantwrap=0):
             where each column represents the stimulus at
             a particular time lag.
     """
-
-    # numpy
     v = np.asarray(v)
-    # do it
     total = prenumlag + postnumlag + 1
     f = np.zeros((len(v), total))
-    for p, i in enumerate(range(total)):
-        if wantwrap:
-            shift = [0 - prenumlag + (p-1)]
-            f[:, p] = np.roll(v, shift, axis=(0, 1)).T
+    for p in range(total):
+        i = p + 1
+        if False:
+            pass
+            # shift = [0 - prenumlag + (p-1)]
+            # f[:, p] = np.roll(v, shift, axis=(0, 1)).T
         else:
-            temp = -prenumlag+(i - 1)
+            temp = -prenumlag + (i - 1)
             if temp < 0:
-                vindx = range(len(v), 1 - temp)
-                findx = range(len(v)+temp)
-                f[findx, p] = v[vindx]
+                pass
+                # vindx = range(len(v), 1 - temp)
+                # findx = range(len(v)+temp)
+                # f[findx, p] = v[vindx]
             else:
-                vindx = range(len(v)-temp)
-                findx = range(len(v), temp+1)
-                f[findx, p] = v[vindx]
+                f[temp:, p] = v[: len(v) - temp]
     return f
