@@ -21,7 +21,7 @@ def get_poly_matrix(n, degrees):
         degrees (array): vector of polynomial degrees
 
     Returns:
-        array: Number of noise regressors to include
+        array: array of n x len(degrees)
     """
     time_points = np.linspace(-1, 1, n)[np.newaxis].T
     polys = np.zeros((n, len(degrees)))
