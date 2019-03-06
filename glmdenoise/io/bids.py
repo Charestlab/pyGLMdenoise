@@ -4,22 +4,27 @@ from bids import BIDSLayout
 class BidsDirectory(object):
 
     def __init__(self, directory):
-        pass
+        self.layout = BIDSLayout(directory, derivatives=True)
 
     def get_preprocessed_subjects_ids(self):
-        pass
+        return self.layout.get(return_type='id', target='subject')
     
     def get_tasks_for_subject(self, subject):
-        pass
+        return self.layout.get(subject=subject, return_type='id', target='task')
 
     def get_filepaths_bold_runs(self, subject, task):
-        pass
+        return self.layout.get(subject=subject, task=task, suffix='preproc', return_type='file')
 
     def get_filepaths_event_runs(self, subject, task):
-        pass
+        return self.layout.get(subject=subject, task=task, suffix='events', return_type='file')
 
     def get_metas_bold_runs(self, subject, task):
-        pass
+        runs = self.layout.get(subject=subject, task=task, suffix='preproc')
+        return [r.metadata for r in runs]
 
     def subject_id_from_number(self, sub_num):
-        pass
+        ids = self.layout.get(return_type='id', target='subject')
+        for nzeros in [0, 2]:
+            candidate = str(sub_num).zfill(nzeros)
+            if candidate in ids:
+                return candidate

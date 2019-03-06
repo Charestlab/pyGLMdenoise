@@ -23,6 +23,10 @@ def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
 def run_bids(bids, sub_num=None, sub=None, task=None):
     if sub and task:
         bold_files = bids.get_filepaths_bold_runs(sub, task)
+        if not bold_files:
+            msg = 'No preprocessed runs found for subject {} task {}'
+            print(msg.format(sub, task))
+            return
         event_files = bids.get_filepaths_event_runs(sub, task)
         metas = bids.get_metas_bold_runs(sub, task)
         trs = [meta['RepetitionTime'] for meta in metas]
