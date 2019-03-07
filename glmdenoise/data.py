@@ -53,7 +53,7 @@ def run_data(design, data, tr, stimdur=0.5):
 
     ## plot solutions
     title = 'HRF fit'
-    report.plot_hrf(hrfknobs, modelmd, title)
+    report.plot_hrf(hrfknobs, modelmd, tr, title)
     report.plot_image(hrffitvoxels, title)    
 
     for p in range(1, max_nregressors):

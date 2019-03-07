@@ -3,6 +3,7 @@ import seaborn
 from matplotlib import pyplot as plt
 from ww import f
 from os.path import join
+import numpy
 
 
 class Report(object):
@@ -34,22 +35,17 @@ class Report(object):
             for block in self.blocks:
                 html_file.write(block + '\n')
 
-    def plot_hrf(self, hrf1, hrf2, title):
-        pass
-
-#   % make figure showing HRF
-#   if ~isequal(hrfmodel,'fir') && length(hrfknobs) > 1
-#     figureprep([100 100 450 250]); hold on;
-#     numinhrf = length(hrfknobs);
-#     h1 = plot(0:tr:(numinhrf-1)*tr,hrfknobs,'ro-');
-#     h2 = plot(0:tr:(numinhrf-1)*tr,results.modelmd{1},'bo-');
-#     ax = axis; axis([0 (numinhrf-1)*tr ax(3) 1.2]);
-#     straightline(0,'h','k-');
-#     legend([h1 h2],{'Initial HRF' 'Estimated HRF'});
-#     xlabel('Time from condition onset (s)');
-#     ylabel('Response');
-#     figurewrite('HRF',[],[],figuredir);
-#   end
+    def plot_hrf(self, hrf1, hrf2, tr=2, title='Hemodynamic Reponse Function'):
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        t = numpy.arange(0, hrf1.size * tr, tr)
+        ax.plot(t, hrf1, label='Initial HRF')
+        ax.plot(t, hrf2, label='Estimated HRF')
+        ax.axhline(0)
+        ax.legend(loc='upper right')
+        ax.set(xlabel='Time from condition onset (s)', ylabel='Response')
+        fig.savefig(self.filepath_for(title))
+        self.add_image(title)
 
     def plot_noise_regressors_cutoff(self, r2, n_noise_regressors, title):
         fig = plt.figure()
