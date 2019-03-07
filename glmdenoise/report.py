@@ -2,6 +2,7 @@ from glmdenoise.makeimagestack import makeimagestack
 import seaborn
 from matplotlib import pyplot as plt
 from ww import f
+from os.path import join
 
 
 class Report(object):
@@ -11,21 +12,24 @@ class Report(object):
         self.toc = []
 
     def add_image(self, name):
-        fname = 'afile.png'
-        html = f('<img id="{name}" src="figures/{fname}" />')
+        fpath = self.filepath_for(name)
+        block_id = self.id_for(name)
+        html = f('<h3 id="{block_id}">{name}</h3><img src="{fpath}" />\n')
         self.blocks.append(html)
         self.toc.append(name)
 
     def add_toc(self):
-        html = ''
-        html += '<ol>'
+        html = '<h2>Table of Contents</h2>\n'
+        html += '<ol>\n'
         for name in self.toc:
-            html += f('<li><a href="#{name}">{name}</a></li>')
-        html += '</ol>'
+            block_id = self.id_for(name)
+            html += f('<li><a href="#{block_id}">{name}</a></li>\n')
+        html += '</ol>\n'
         self.blocks.insert(0, html)
 
     def save(self):
         self.add_toc()
+        self.blocks.insert(0, '<h1>GLMdenoise</h1>\n')
         with open('report.html', 'w') as html_file:
             for block in self.blocks:
                 html_file.write(block + '\n')
@@ -48,18 +52,27 @@ class Report(object):
 #   end
 
     def plot_noise_regressors_cutoff(self, r2, n_noise_regressors, title):
-        max_nregressors = r2.shape[1]
+        max_nregressors = r2.shape[0]
         ax = seaborn.lineplot(data=r2)
         ax.scatter(n_noise_regressors, r2[n_noise_regressors]) 
         ax.set_xticks(range(max_nregressors))
         ax.set_title(title)
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
-    def plot_image(self, imgvector, dtype='mask'):
+    def plot_image(self, imgvector, title='no title', dtype='mask'):
         # dtype= mask, range, scaled, percentile, custom
-        import matplotlib.pyplot as plt 
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
         stack = makeimagestack(imgvector.reshape(self.spatialdims))
-        ax = plt.imshow(stack)
+        ax.imshow(stack)
+        fig.savefig(self.filepath_for(title))
+        self.add_image(title)
+
+    def filepath_for(self, name):
+        return join('figures', self.id_for(name) + '.png')
+
+    def id_for(self, name):
+        return name.replace(' ', '_')
 
 #   % write out image showing HRF fit voxels
 #   if isequal(hrfmodel,'optimize') && ~isempty(results.hrffitvoxels)
