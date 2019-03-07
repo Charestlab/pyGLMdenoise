@@ -52,12 +52,16 @@ class Report(object):
 #   end
 
     def plot_noise_regressors_cutoff(self, r2, n_noise_regressors, title):
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
         max_nregressors = r2.shape[0]
-        ax = seaborn.lineplot(data=r2)
+        ax.plot(r2)
         ax.scatter(n_noise_regressors, r2[n_noise_regressors]) 
         ax.set_xticks(range(max_nregressors))
         ax.set_title(title)
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
+        fig.savefig(self.filepath_for(title))
+        self.add_image(title)
 
     def plot_image(self, imgvector, title='no title', dtype='mask'):
         # dtype= mask, range, scaled, percentile, custom
