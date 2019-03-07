@@ -1,7 +1,7 @@
 import numpy as np
 
 """
-def = constructstimulusmatrices(m,prenumlag,postnumlag,wantwrap)
+def = constructStimulusMatrices(m,prenumlag,postnumlag,wantwrap)
 
 <m> is a 2D matrix, each row of which is a stimulus sequence (i.e.
    a vector that is all zeros except for ones indicating the onset
