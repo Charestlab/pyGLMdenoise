@@ -7,11 +7,15 @@ from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
 from glmdenoise.select_voxels_nr_selection import select_voxels_nr_selection
 from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.makeimagestack import makeimagestack
+from glmdenoise.report import Report
 import numpy, seaborn
 
 
 def run_data(design, data, tr, stimdur=0.5):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
+
+    ## start a new report with figures
+    report = Report()
 
     ## fake output from step 6 
     nx, ny, nz, max_nregressors = 3, 4, 5, 20
