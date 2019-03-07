@@ -1,12 +1,34 @@
 from glmdenoise.makeimagestack import makeimagestack
 import seaborn
 from matplotlib import pyplot as plt
+from ww import f
 
 
 class Report(object):
 
     def __init__(self):
-        pass
+        self.blocks = []
+        self.toc = []
+
+    def add_image(self, name):
+        fname = 'afile.png'
+        html = f('<img id="{name}" src="figures/{fname}" />')
+        self.blocks.append(html)
+        self.toc.append(name)
+
+    def add_toc(self):
+        html = ''
+        html += '<ol>'
+        for name in self.toc:
+            html += f('<li><a href="#{name}">{name}</a></li>')
+        html += '</ol>'
+        self.blocks.insert(0, html)
+
+    def save(self):
+        self.add_toc()
+        with open('report.html', 'w') as html_file:
+            for block in self.blocks:
+                html_file.write(block + '\n')
 
     def plot_hrf(self, hrf1, hrf2, title):
         pass
@@ -25,11 +47,12 @@ class Report(object):
 #     figurewrite('HRF',[],[],figuredir);
 #   end
 
-    def plot_noise_regressors_cutoff(self, r2, title):
-        ax = seaborn.lineplot(data=r2_nrs)
-        ax.scatter(n_noise_regressors, r2_nrs[n_noise_regressors]) 
+    def plot_noise_regressors_cutoff(self, r2, n_noise_regressors, title):
+        max_nregressors = r2.shape[1]
+        ax = seaborn.lineplot(data=r2)
+        ax.scatter(n_noise_regressors, r2[n_noise_regressors]) 
         ax.set_xticks(range(max_nregressors))
-        ax.set_title('chosen number of regressors')
+        ax.set_title(title)
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
     def plot_image(self, imgvector, dtype='mask'):
