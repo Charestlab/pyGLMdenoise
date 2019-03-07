@@ -6,20 +6,25 @@ from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
 from glmdenoise.select_voxels_nr_selection import select_voxels_nr_selection
 from glmdenoise.select_noise_regressors import select_noise_regressors
-from glmdenoise.makeimagestack import makeimagestack
-import numpy, seaborn
+from glmdenoise.report import Report
+import numpy
 
 
 def run_data(design, data, tr, stimdur=0.5):
     # hrfmodel='optimise',hrfknobs=None,opt=None,figuredir=None
 
+
+
     ## fake output from step 6 
     nx, ny, nz, max_nregressors = 3, 4, 5, 20
+    spatialdims = (nx, ny, nz)
     nvoxels = nx * ny * nz
     brain = numpy.random.rand(nx, ny, nz) - 0.5
     pcR2 = numpy.repeat(brain[:,:,:, numpy.newaxis], max_nregressors, axis=3)
     nr_range = numpy.arange(1, max_nregressors+1)
     pcR2 = pcR2 * (nr_range/(nr_range + 0.25))
+
+
 
     ##########################################################################
     ## Step 7: Select number of noise regressors
@@ -38,80 +43,87 @@ def run_data(design, data, tr, stimdur=0.5):
     n_noise_regressors = select_noise_regressors(r2_nrs)
     print(n_noise_regressors)
 
+    ##########################################################################
+    ## Figures
+    ##########################################################################
+
+    ## start a new report with figures
+    report = Report()
+    report.spatialdims = (nx, ny, nz)
+
     ## plot solutions
-    ax = seaborn.lineplot(data=r2_nrs)
-    ax.scatter(n_noise_regressors, r2_nrs[n_noise_regressors]) 
-    ax.set_xticks(range(max_nregressors))
-    ax.set_title('chosen number of regressors')
-    ax.set(xlabel='# noise regressors', ylabel='Median R2')
+    title = 'HRF fit'
+    report.plot_hrf(hrfknobs, modelmd, tr, title)
+    report.plot_image(hrffitvoxels, title)    
+
+    for p in range(1, max_nregressors):
+        report.plot_scatter_sparse(
+            [
+                (r2_voxels_nrs[:, 0], r2_voxels_nrsr[:, p]),
+                (r2_voxels_nrs[pcvoxels, 0], r2_voxels_nrsr[pcvoxels, p]),
+            ],
+            xlabel='Cross-validated R^2 (0 PCs)',
+            ylabel='Cross-validated R^2 ({p} PCs)',
+            title='PCscatter{p}',
+            crosshairs=True,
+        )
 
     ## plot voxels for noise regressor selection
-    import matplotlib.pyplot as plt 
-    stack = makeimagestack(voxels_nr_selection.reshape(nx, ny, nz))
-    ax = plt.imshow(stack)
-    
+    title = 'Noise regressor selection'
+    report.plot_noise_regressors_cutoff(r2_nrs, n_noise_regressors,
+        title='Chosen number of regressors')
+    report.plot_image(voxels_nr_selection, title)
 
-    ######################### DEAL WITH INPUTS, ETC.
-    
-    # default hrfmodel is optimise
-    
-    # if hrfknobs is None:
-    #     if hrfmodel == 'fir':
-    #         hrfknobs = 20
-    #     else:
-    #         hrfknobs = normalisemax(getcanonicalhrf(stimdur,tr).T)
-    
-    # if opt is None:
-    #     opt = dict()
-    
-    # if figuredir is None:
-    #     figuredir = 'GLMdenoisefigures'
-    
-    # # massage input
-    # if not isinstance(design, dict):
-    #     design = {design}
-    
-    # # make sure the data is in the right format
-    # if not isinstance(data,dict):
-    #     data[0] = data
-    
-    # # reduce precision to single
-    # for p, dataset in enumerate(data):
-    #     if not isinstance(dataset, np.float32):
-    #         print('***\n\n\n##########\n GLMdenoisedata: converting data in run {0} to single format (consider doing this before the function call to reduce memory usage). \n\n\n##########\n***\n'.format(p))
-    #         data[p] = np.single(data[p])   
-    
-    # # do some error checking
-    # if any(np.isfinite(data[1])):
-    #     print('***\n\n\n##########\n GLMdenoisedata: WARNING: we checked the first run and found some non-finite values (e.g. NaN, Inf). unexpected results may occur due to non-finite values. please fix and re-run GLMdenoisedata. \n\n\n##########\n***\n')
-    
-    # if hrfknobs is None:
-    #     if hrfmodel == 'fir':
-    #         hrfknobs = 20
-    #     else:
-    #         hrfknobs = normalisemax(getcanonicalhrf(stimdur,tr).T)
-    
-    # if opt is None:
-    #     opt = dict()
-    
-    # if figuredir is None:
-    #     figuredir = 'GLMdenoisefigures'
-    
-    # # massage input
-    # if not isinstance(design, dict):
-    #     design = {design}
-    
-    # # make sure the data is in the right format
-    # if not isinstance(data,dict):
-    #     data[0] = data
-    
-    # # reduce precision to single
-    # for p, dataset in enumerate(data):
-    #     if not isinstance(dataset, np.float32):
-    #         print('***\n\n\n##########\n GLMdenoisedata: converting data in run {0} to single format (consider doing this before the function call to reduce memory usage). \n\n\n##########\n***\n'.format(p))
-    #         data[p] = np.single(data[p])   
-    
-    # # do some error checking
-    # if any(np.isfinite(data[1])):
-    #     print('***\n\n\n##########\n GLMdenoisedata: WARNING: we checked the first run and found some non-finite values (e.g. NaN, Inf). unexpected results may occur due to non-finite values. please fix and re-run GLMdenoisedata. \n\n\n##########\n***\n')
-    
+    ## various images
+    report.plot_image(results.meanvol, 'Mean volume')
+    report.plot_image(results.noisepool, 'Noise Pool')
+    report.plot_image(opt.brainexclude, 'Noise Exclude')
+    report.plot_image(opt.hrffitmask, 'HRFfitmask')
+    report.plot_image(opt.pcR2cutoffmask, 'PCmask')
+
+    for n in range(size(results.pcR2, dimdata+1)):
+        report.plot_image(results.pcR2[:, n], 'PCcrossvalidation%02d', dtype='range')
+        report.plot_image(results.pcR2[:, n], 'PCcrossvalidationscaled%02d', dtype='scaled')
+
+    report.plot_image(results.R2, 'FinalModel')
+    for r in range(nruns):
+        report.plot_image(results.R2run[r], 'FinalModel_run%02d')
+
+    report.plot_image(results.signal,'SNRsignal.png', dtype='percentile')
+    report.plot_image(results.noise, 'SNRnoise', dtype='percentile')
+    report.plot_image(results.SNR, 'SNR', dtype='percentile')
+  
+    ## Signal to noise
+    report.plot_scatter_sparse(
+        [
+            (results.SNRbefore[:], results.SNRafter[:]),
+            (results.SNRbefore(pcvoxels), results.SNRafter(pcvoxels)),
+        ],
+        xlabel='SNR (before denoising)',
+        ylabel='SNR (after denoising)',
+        title='SNRcomparebeforeandafter',
+    )
+    datagain = ((results.SNRafter / results.SNRbefore) ** 2 - 1) * 100
+    report.plot_scatter_sparse(
+        [
+            (results.SNRbefore[:], datagain[:]),
+            (results.SNRbefore[pcvoxels], datagain[pcvoxels]),
+        ],
+        xlabel='SNR (before denoising)',
+        ylabel='Equivalent amount of data gained (%)',
+        title='SNRamountofdatagained',
+    )
+
+    ## PC weights
+    thresh = prctile(numpy.abs(results.pcweights[:]), 99)
+    for p in range(1, size(results.pcweights, dimdata+1)):
+        for q in range(1, size(results.pcweights, dimdata+2)):
+            report.plot_image(
+                results.pcweights[p, q],
+                'PCmap_run%02d_num%02d.png',
+                dtype='custom',
+                drange=[-thresh, thresh]
+            )
+
+    # stores html report
+    report.save()

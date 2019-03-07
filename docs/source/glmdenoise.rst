@@ -36,6 +36,14 @@ glmdenoise.makeimagestack module
     :undoc-members:
     :show-inheritance:
 
+glmdenoise.report module
+------------------------
+
+.. automodule:: glmdenoise.report
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 glmdenoise.select\_noise\_regressors module
 -------------------------------------------
 
