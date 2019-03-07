@@ -71,7 +71,7 @@ def run_data(design, data, tr, stimdur=0.5):
     ## plot voxels for noise regressor selection
     title = 'Noise regressor selection'
     report.plot_noise_regressors_cutoff(r2_nrs, n_noise_regressors,
-        title='chosen number of regressors')
+        title='Chosen number of regressors')
     report.plot_image(voxels_nr_selection, title)
 
     ## various images

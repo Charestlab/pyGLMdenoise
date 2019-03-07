@@ -74,23 +74,13 @@ class Report(object):
     def id_for(self, name):
         return name.replace(' ', '_')
 
-#   % write out image showing HRF fit voxels
-#   if isequal(hrfmodel,'optimize') && ~isempty(results.hrffitvoxels)
-#     imwrite(uint8(255*makeimagestack(opt.drawfunction(results.hrffitvoxels),[0 1])),gray(256),fullfile(figuredir,'HRFfitvoxels.png'));
-#   end
-#   % define a function that will write out R^2 values to an image file
-#   imfun = @(results,filename) ...
-#     imwrite(uint8(255*makeimagestack(opt.drawfunction(signedarraypower(results/100,0.5)),[0 1])),hot(256),filename);
-
-#     % figure out bounds for the R^2 values
-#     bounds = prctile(results.pcR2(:),[1 99]);
-#     if bounds(1)==bounds(2)  % a hack to avoid errors in normalization
-#       bounds(2) = bounds(1) + 1;
-#     end
-
-#     % define another R^2 image-writing function
-#     imfunB = @(results,filename) ...
-#       imwrite(uint8(255*makeimagestack(opt.drawfunction(signedarraypower(normalizerange(results,0,1,bounds(1),bounds(2)),0.5)),[0 1])),hot(256),filename);
-
     def plot_scatter_sparse(self, data, xlabel, ylabel, title, crosshairs=False):
-        pass
+        fig = plt.figure()
+        ax = fig.add_subplot(1, 1, 1)
+        for x, y in data:
+            nsample = min(1000, x.size)
+            subset = numpy.random.choice(x.size, nsample, replace=False)
+            ax.scatter(x[subset], y[subset])
+        ax.set(xlabel=xlabel, ylabel=ylabel)
+        fig.savefig(self.filepath_for(title))
+        self.add_image(title)
