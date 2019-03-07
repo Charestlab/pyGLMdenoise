@@ -25,7 +25,7 @@ class Report(object):
 #     figurewrite('HRF',[],[],figuredir);
 #   end
 
-    def plot_noise_regessors_cutoff(self, r2):
+    def plot_noise_regressors_cutoff(self, r2, title):
         ax = seaborn.lineplot(data=r2_nrs)
         ax.scatter(n_noise_regressors, r2_nrs[n_noise_regressors]) 
         ax.set_xticks(range(max_nregressors))
@@ -33,9 +33,11 @@ class Report(object):
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
 
     def plot_image(self, imgvector, dtype='mask'):
+        # dtype= mask, range, scaled, percentile, custom
         import matplotlib.pyplot as plt 
         stack = makeimagestack(imgvector.reshape(self.spatialdims))
         ax = plt.imshow(stack)
+
 #   % write out image showing HRF fit voxels
 #   if isequal(hrfmodel,'optimize') && ~isempty(results.hrffitvoxels)
 #     imwrite(uint8(255*makeimagestack(opt.drawfunction(results.hrffitvoxels),[0 1])),gray(256),fullfile(figuredir,'HRFfitvoxels.png'));
@@ -53,3 +55,6 @@ class Report(object):
 #     % define another R^2 image-writing function
 #     imfunB = @(results,filename) ...
 #       imwrite(uint8(255*makeimagestack(opt.drawfunction(signedarraypower(normalizerange(results,0,1,bounds(1),bounds(2)),0.5)),[0 1])),hot(256),filename);
+
+    def plot_scatter_sparse(self, data, xlabel, ylabel, title, crosshairs=False):
+        pass
