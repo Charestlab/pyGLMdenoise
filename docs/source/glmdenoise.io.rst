@@ -4,30 +4,11 @@ glmdenoise.io package
 Submodules
 ----------
 
-glmdenoise.io.bids module
--------------------------
+.. toctree::
 
-.. automodule:: glmdenoise.io.bids
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-glmdenoise.io.directory module
-------------------------------
-
-.. automodule:: glmdenoise.io.directory
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-glmdenoise.io.files module
---------------------------
-
-.. automodule:: glmdenoise.io.files
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+   glmdenoise.io.bids
+   glmdenoise.io.directory
+   glmdenoise.io.files
 
 Module contents
 ---------------
