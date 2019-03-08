@@ -66,11 +66,11 @@ def constructStimulusMatrices(m, prenumlag=0, postnumlag=0, wantwrap=0):
         f = m.T
         return f
     else:
-        nconds, nvols = m.shape()
+        nconds, nvols = m.shape
 
         # do it
         num = prenumlag + postnumlag + 1
-        f = np.zeros((nvols, num * nconds))
+        f = np.zeros((nvols, num*nconds))
         for p in range(nconds):
             i = p + 1
             thiscol = (i - 1) * num + np.array(range(num))

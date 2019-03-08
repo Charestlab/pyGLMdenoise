@@ -1,8 +1,65 @@
 import numpy as np
 from statsmodels.regression.linear_model import OLS
-from scipy.signal import convolve2d as conv2
 from glmdenoise.utils.stimMat import constructStimulusMatrices
 from glmdenoise.utils import R2_nom_denom
+from glmdenoise.utils.get_poly_matrix import get_poly_matrix
+
+
+def mtimesStack(m1, m2):
+    """function f = mtimescell(m1,m2)
+
+    simply return <m1>*np.vstack(m2) but do so in a way that doesn't cause
+    too much memory usage.
+
+    Args:
+        m1 ([A x B]): is A x B
+        m2 ([B x C]): is a stack of matrices such that np.vstack(m2) is B x C
+    """
+    nruns = len(m2)
+    f = 0
+    cnt = 0
+    for q in range(nruns):
+        nvols = m2[q].shape[0]
+        thiscol = cnt + list(range(nvols))
+        f = f + m1[:, thiscol] * m2[q]
+        cnt = cnt + m2[q].shape[0]
+
+    return f
+
+
+def olsmatrix(X):
+    bad = np.all(X == 0, 1)
+    good = np.invert(bad)
+
+    # report warning
+    if any(bad):
+        print(
+            'One or more regressors are all zeros; we will estimate a 0 weight for those regressors.')
+
+    # do it
+    if any(bad):
+        f = np.zeros((X.shape[1], X.shape[0]))
+
+        f[good, :] = np.linalg.inv(X[:, good].T*X[:, good])*X[:, good].T
+
+    else:
+
+        f = np.linalg.inv(X.T*X)*X.T
+
+    return f
+
+
+def convolveDesign(X, hrf):
+    """[summary]
+
+    Args:
+        X ([2D design matrix]): time by cond
+        hrf ([1D hrf function]): hrf
+    """
+    ntime, ncond = X.shape
+    convdes = np.asarray([np.convolve(X[:, x], hrf) for x in range(ncond)]).T
+
+    return convdes[0:ntime, :]
 
 
 def optimiseHRF(design, data, tr, hrfknobs, combinedmatrix, numforhrf=50, hrfthresh=.5, hrffitmask=1):
@@ -26,17 +83,21 @@ def optimiseHRF(design, data, tr, hrfknobs, combinedmatrix, numforhrf=50, hrfthr
 
     # calc
     numinhrf = len(hrfknobs)
-    numruns, numcond, ntime = design.shape()
+
+    numruns = len(design)
+    numcond, ntime = design[0].shape
     postnumlag = numinhrf-1
     # precompute for speed
     convdesignpre = []
     for p in range(numruns):
         # expand design matrix using delta functions
         ntime = design[p].shape[0]
-        convdesignpre[p] = constructStimulusMatrices(
-            design[p].T, prenumlag=0, postnumlag=postnumlag)  # time x L*conditions
+        # time x L*conditions
+        stimmat = constructStimulusMatrices(
+            design[p].T, prenumlag=0, postnumlag=postnumlag)
+
         # time*L x conditions
-        convdesignpre[p] = convdesignpre[p].reshape(numinhrf*ntime, numcond)
+        convdesignpre.append(stimmat.reshape(numinhrf*ntime, numcond))
 
     # loop until convergence
     currenthrf = hrfknobs  # initialize
@@ -52,22 +113,20 @@ def optimiseHRF(design, data, tr, hrfknobs, combinedmatrix, numforhrf=50, hrfthr
 
                 # convolve original design matrix with HRF
                 # number of time points
-                ntime = design[p].shape[0]
-                convdesign[p] = conv2(design[p], currenthrf)     # convolve
-                # extract desired subset
-                convdesign[p] = convdesign[p][1:ntime, :]
+                convdes = convolveDesign(design[p], currenthrf)
 
-                # remove polynomials and extra regressors
-                convdesign[p] = combinedmatrix[p] * \
-                    convdesign[p]  # time x conditions
+                # project the polynomials out
+                convdes = get_poly_matrix(
+                    convdes.shape[0], [0, 1, 2, 3]) * convdes
+                # time x conditions
+
+                convdesign.append(convdes)
 
             # stack design across runs
             stackdesign = np.vstack(convdesign)
 
             # estimate the amplitudes (output: conditions x voxels)
-            currentbeta = 0
-            currentbeta = [currentbeta+OLS(convdesign[x], data[x])
-                           for x in range(numruns)]
+            currentbeta = mtimesStack(olsmatrix(stackdesign), data)
 
             # calculate R^2
             modelfit = [convdesign[x]*currentbeta for x in range(numruns)]
