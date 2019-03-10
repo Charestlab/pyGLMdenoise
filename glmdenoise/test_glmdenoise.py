@@ -3,18 +3,13 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from nistats.design_matrix import make_first_level_design_matrix as make_design_matrix
-from nistats.design_matrix import make_design_matrix
-from nistats.reporting import plot_design_matrix
 from itertools import compress
-import statsmodels.api as sm
-from tqdm import tqdm
 import warnings
-from utils.get_poly_matrix import *
+from utils import get_poly_matrix as gpm
 import numpy
-from glmdenoise.utils.make_design import make_design
-from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
-from glmdenoise.utils.normalisemax import normalisemax
+from utils import optimiseHRF as ohrf
+from utils.getcanonicalhrf import getcanonicalhrf
+from utils.normalisemax import normalisemax
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -40,9 +35,9 @@ def fit_separate_runs(runs, DM, extra_regressors=False):
 
         for i, (y, X) in enumerate(zip(runs, DM)):
             X = np.c_[X, extra_regressors[i]]
-            polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = make_project_matrix(polynomials) * y
-            DM[i] = make_project_matrix(polynomials) * X
+            polynomials = gpm.get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
+            runs[i] = gpm.make_project_matrix(polynomials) * y
+            DM[i] = gpm.make_project_matrix(polynomials) * X
         # n_regs = extra_regressors[0].shape[1]
         # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
         X = np.vstack(DM)
@@ -62,9 +57,9 @@ def fit_separate_runs(runs, DM, extra_regressors=False):
         #     betas += sm.OLS(run, X).fit().params
     else:
         for i, (y, X) in enumerate(zip(runs, DM)):
-            polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = make_project_matrix(polynomials) * y
-            DM[i] = make_project_matrix(polynomials) * X
+            polynomials = gpm.get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
+            runs[i] = gpm.make_project_matrix(polynomials) * y
+            DM[i] = gpm.make_project_matrix(polynomials) * X
         betas = np.zeros((DM[0].shape[1], runs[0].shape[1]))
 
         # n_regs = extra_regressors[0].shape[1]
@@ -122,6 +117,10 @@ design = []
 n_runs = 6
 stimdur = 0.5
 TR = 0.764
+
+# initialise hrf
+hrf = normalisemax(getcanonicalhrf(stimdur, TR))
+
 for ii in range(n_runs):
     y = np.load(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.npy")
     y = np.swapaxes(y, 0, 2)
@@ -146,11 +145,8 @@ for ii in range(n_runs):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    hrf = normalisemax(getcanonicalhrf(stimdur, TR))
-    X = make_design(events, TR, y, hrf)
-
     data.append(y)
-    design.append(X)
+    design.append(events)
 
 # kendricks formula for the number of degrees to use
 maxpolydeg = int(((data[0].shape[0] * TR) / 60) // 2)

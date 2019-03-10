@@ -1,7 +1,85 @@
 import numpy as np
-from glmdenoise.utils.stimMat import constructStimulusMatrices
-from glmdenoise.utils import R2_nom_denom
-from glmdenoise.utils.get_poly_matrix import get_poly_matrix
+from utils.stimMat import constructStimulusMatrices
+from utils import R2_nom_denom
+from utils.get_poly_matrix import get_poly_matrix
+from scipy.interpolate import pchip
+
+
+def linspacefixeddiff(x, d, n):
+    """
+    f = linspacefixeddiff(x, d, n)
+
+    Args:
+        x ([int]): < x > is a number
+        d ([int]): < d > is difference between successive numbers
+        n ([type]): < n > is the number of desired points(positive integer)
+
+    Returns:
+        a vector of equally spaced values starting at < x > .
+
+    Example:
+        assert(linspacefixeddiff(0, 2, 5)==[0, 2, 4, 6, 8])
+    """
+    x2 = x+d*(n-1)
+    return np.linspace(x, x2, n)
+
+
+def make_design(events, tr, data, hrf=None):
+
+    # calc
+    ntimes = data.shape[0]
+    alltimes = linspacefixeddiff(0, tr, ntimes)
+    hrftimes = linspacefixeddiff(0, tr, len(hrf))
+
+    # loop over conditions
+    conditions = list(set(events.trial_type))
+    nconditions = len(conditions)
+
+    if hrf is None:
+        # we need to make a stick matrix
+        # this will be time x conditions
+        temp = np.zeros((ntimes, nconditions))
+        for i, q in enumerate(conditions):
+
+            # onset times for qth condition in run p
+            otimes = events.loc[events['trial_type'] == q, 'onset'].values
+
+            # intialize
+            yvals = np.zeros((ntimes))
+            # loop over onset times
+            for r in otimes:
+                # interpolate to find values at the data sampling time points
+                sampler = alltimes
+                f = np.where(alltimes == min(
+                    alltimes, key=lambda x: abs(x-r)))
+                yvals[f] = 1
+
+            # record
+            temp[:, i] = yvals
+    else:
+
+        # this will be time x conditions
+        temp = np.zeros((ntimes, nconditions))
+        for i, q in enumerate(conditions):
+
+            # onset times for qth condition in run p
+            otimes = events.loc[events['trial_type'] == q, 'onset'].values
+
+            # intialize
+            yvals = np.zeros((ntimes))
+
+            # loop over onset times
+            for r in otimes:
+                # interpolate to find values at the data sampling time points
+                sampler = alltimes
+                f = pchip(r + hrftimes, hrf, extrapolate=False)(sampler)
+                f[np.isnan(f)] = 0
+                yvals = yvals + f
+
+            # record
+            temp[:, i] = yvals
+
+    return temp
 
 
 def mtimesStack(m1, m2):
@@ -110,7 +188,7 @@ def optimiseHRF(
     like approach.
 
     Args:
-        design ([type]): [description]
+        events ([type]): [description]
         data ([type]): [description]
         tr ([type]): [description]
         hrfknobs ([type]): [description]
@@ -129,16 +207,20 @@ def optimiseHRF(
     numinhrf = len(hrfknobs)
 
     numruns = len(design)
-    numcond, ntime = design[0].shape
+
     postnumlag = numinhrf - 1
     # precompute for speed
     convdesignpre = []
     for p in range(numruns):
+        events = design[p]
+        # construct design matrix
+        X = make_design(events, tr, data[p])
+
         # expand design matrix using delta functions
-        ntime = design[p].shape[0]
+        ntime, numcond = X.shape
         # time x L*conditions
         stimmat = constructStimulusMatrices(
-            design[p].T, prenumlag=0, postnumlag=postnumlag
+            X.T, prenumlag=0, postnumlag=postnumlag
         )
 
         # time*L x conditions
@@ -156,9 +238,9 @@ def optimiseHRF(
             convdesign = []
             for p in range(numruns):
 
-                # convolve original design matrix with HRF
+                # get design matrix with HRF
                 # number of time points
-                convdes = convolveDesign(design[p], currenthrf)
+                convdes = make_design(events, data[p], tr, currenthrf)
 
                 # project the polynomials out
                 convdes = (
