@@ -12,6 +12,9 @@ from tqdm import tqdm
 import warnings
 from utils.get_poly_matrix import *
 import numpy
+from glmdenoise.utils.make_design import make_design
+from glmdenoise.utils.getcanonicalhrf import getcanonicalhrf
+from glmdenoise.utils.normalisemax import normalisemax
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -117,14 +120,14 @@ def R2_nom_denom(y, yhat):
 data = []
 design = []
 n_runs = 6
+stimdur = 0.5
+TR = 0.764
 for ii in range(n_runs):
     y = np.load(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.npy")
     y = np.swapaxes(y, 0, 2)
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
-    stimdur = 0.5
-    TR = 0.764
     n_scans = y.shape[0]
     frame_times = np.arange(n_scans) * TR
 
@@ -143,12 +146,11 @@ for ii in range(n_runs):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    X = make_design_matrix(
-        frame_times, events, hrf_model="glover", drift_model=None
-    )
+    hrf = normalisemax(getcanonicalhrf(stimdur, TR))
+    X = make_design(events, TR, y, hrf)
 
     data.append(y)
-    design.append(X.values[:, :-1])
+    design.append(X)
 
 # kendricks formula for the number of degrees to use
 maxpolydeg = int(((data[0].shape[0] * TR) / 60) // 2)
@@ -216,8 +218,10 @@ plt.show()
 """
 plots noise pool
 
-sns.heatmap(noise_pool_mask.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
-sns.heatmap(best_vox.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
+sns.heatmap(noise_pool_mask.reshape(
+    *dims[1:]).astype(int),xticklabels=False, yticklabels=False)
+sns.heatmap(best_vox.reshape(
+    *dims[1:]).astype(int),xticklabels=False, yticklabels=False)
 """
 mask = mean_mask.reshape(-1)
 # noise_pool_mask = (r2s_vanilla < 0) & mask
