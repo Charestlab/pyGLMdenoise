@@ -2,7 +2,7 @@ from sklearn.preprocessing import normalize
 import numpy as np
 
 
-def make_project_matrix(X):
+def projectionmatrix(X):
     """ Calculates a projection matrix
 
     Args:
@@ -11,11 +11,17 @@ def make_project_matrix(X):
     Returns:
         array: Projection matrix size of X.shape[0] x X.shape[0]
     """
-    X = np.mat(X)
-    return np.eye(X.shape[0]) - (X*(np.linalg.inv(X.T*X)*X.T))
+    if X is None:
+        return 1
+    else:
+        X = np.mat(X)
+        # Note (mat)
+        # It is no longer recommended to use this class, even for linear algebra.
+        # Instead use regular arrays. The class may be removed in the future.
+        return np.eye(X.shape[0]) - (X*(np.linalg.inv(X.T*X)*X.T))
 
 
-def get_poly_matrix(n, degrees):
+def constructpolynomialmatrix(n, degrees):
     """Calculates a matrix of polynomials used to regress them out of your data
 
     Args:
@@ -33,7 +39,7 @@ def get_poly_matrix(n, degrees):
         polyvector = np.mat(time_points**d)
 
         if i > 0:  # project out the other polynomials
-            polyvector = make_project_matrix(polys[:, :i]) * polyvector
+            polyvector = projectionmatrix(polys[:, :i]) * polyvector
 
         polys[:, i] = normalize(polyvector.T)
-    return make_project_matrix(polys)
+    return polys

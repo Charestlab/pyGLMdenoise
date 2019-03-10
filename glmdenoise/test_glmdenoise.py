@@ -6,25 +6,11 @@ import pandas as pd
 from itertools import compress
 import warnings
 from utils import get_poly_matrix as gpm
-import numpy
 from utils import optimiseHRF as ohrf
 from utils.getcanonicalhrf import getcanonicalhrf
 from utils.normalisemax import normalisemax
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-def rsquared(y, yhat):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        denom = np.sum((y - y.mean(axis=0)) ** 2,
-                       axis=0)  # correct denominator
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-        rsq = np.nan_to_num(1 - nom / denom)
-
-    # remove inf-values because we might have voxels outside the brain
-    rsq[rsq < -1] = -1
-    return rsq
 
 
 def fit_separate_runs(runs, DM, extra_regressors=False):
@@ -35,9 +21,10 @@ def fit_separate_runs(runs, DM, extra_regressors=False):
 
         for i, (y, X) in enumerate(zip(runs, DM)):
             X = np.c_[X, extra_regressors[i]]
-            polynomials = gpm.get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = gpm.make_project_matrix(polynomials) * y
-            DM[i] = gpm.make_project_matrix(polynomials) * X
+            polynomials = gpm.constructpolynomialmatrix(
+                X.shape[0], [0, 1, 2, 3, 4])
+            runs[i] = gpm.projectionmatrix(polynomials) * y
+            DM[i] = gpm.constructpolynomialmatrix(polynomials) * X
         # n_regs = extra_regressors[0].shape[1]
         # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
         X = np.vstack(DM)
@@ -57,8 +44,9 @@ def fit_separate_runs(runs, DM, extra_regressors=False):
         #     betas += sm.OLS(run, X).fit().params
     else:
         for i, (y, X) in enumerate(zip(runs, DM)):
-            polynomials = gpm.get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = gpm.make_project_matrix(polynomials) * y
+            polynomials = gpm.constructpolynomialmatrix(
+                X.shape[0], [0, 1, 2, 3, 4])
+            runs[i] = gpm.projectionmatrix(polynomials) * y
             DM[i] = gpm.make_project_matrix(polynomials) * X
         betas = np.zeros((DM[0].shape[1], runs[0].shape[1]))
 
@@ -96,25 +84,18 @@ def get_constants(run_lens):
     return const
 
 
-def R2_nom_denom(y, yhat):
-    """ Calculates the nominator and denomitor for calculating R-squared
-
-    Args:
-        y (array): data
-        yhat (array): predicted data data
-
-    Returns:
-        nominator (float or array), denominator (float or array)
-    """
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-    return nom, denom
+# options
+opt = {}
+opt['hrfmodel'] = 'optimise'
+opt['extraregressors'] = None
 
 
 data = []
 design = []
-n_runs = 6
+maxpolydeg = []
+polynomials = []
+combinedmatrix = []
+n_runs = 2
 stimdur = 0.5
 TR = 0.764
 
@@ -122,13 +103,36 @@ TR = 0.764
 hrf = normalisemax(getcanonicalhrf(stimdur, TR))
 
 for ii in range(n_runs):
+    # load the data and append
     y = np.load(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.npy")
     y = np.swapaxes(y, 0, 2)
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
-    n_scans = y.shape[0]
-    frame_times = np.arange(n_scans) * TR
+    # get n volumes
+    n_vols = y.shape[0]
+
+    # get polynomials
+    maxpolydeg.append(int(((n_vols * TR) / 60) // 2))
+
+    pmatrix = gpm.constructpolynomialmatrix(
+        n_vols, list(range(maxpolydeg[ii])))
+
+    polynomials.append(gpm.projectionmatrix(pmatrix))
+
+    data.append(polynomials[ii] * y)
+
+    # handle extra regressors
+    if opt['extraregressors'] is not None:
+        pass
+        # exmatrix.append(gpm.projectionmatrix(opt['extraregressors'][ii]))
+        # combinedmatrix.append(gpm.projectionmatrix(
+        #         np.concatenate(pmatrix, opt['extraregressors'][ii], axis=1)))
+    else:
+        combinedmatrix.append(polynomials[ii])
+
+    # work on events and design
+    frame_times = np.arange(n_vols) * TR
 
     # Load onsets and item presented
     onsets = pd.read_csv(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.csv")[
@@ -145,10 +149,24 @@ for ii in range(n_runs):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    data.append(y)
-    design.append(events)
+    if opt['hrfmodel'] == 'optimise':
+        # if optimise hrf, we pass the design as a stack of events pandas
+        # this is because we need the event deltas design matrix
+        design.append(events)
+    else:
+        X = ohrf.make_design(events, TR, data[ii], hrf)
+        design.append(X)
 
-# kendricks formula for the number of degrees to use
+if opt['hrfmodel'] == 'optimise':
+    hrfparams = ohrf.optimiseHRF(design,
+                                 data,
+                                 TR,
+                                 hrf,
+                                 combinedmatrix)
+else:
+    pass
+
+    # kendricks formula for the number of degrees to use
 maxpolydeg = int(((data[0].shape[0] * TR) / 60) // 2)
 # mean data and mask
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])

@@ -1,8 +1,51 @@
 import numpy as np
 from utils.stimMat import constructStimulusMatrices
-from utils import R2_nom_denom
-from utils.get_poly_matrix import get_poly_matrix
+from utils.R2_nom_denom import R2_nom_denom
 from scipy.interpolate import pchip
+from pdb import set_trace
+
+
+def rsquared(y, yhat):
+    y = np.array(y)
+    yhat = np.array(yhat)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        nom = np.sum((y - yhat) ** 2, axis=0)
+        # denom = np.sum((y - y.mean(axis=0)) ** 2,
+        #               axis=0)  # correct denominator
+        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
+        rsq = np.nan_to_num(1 - nom / denom)
+
+    # remove inf-values because we might have voxels outside the brain
+    rsq[rsq < -1] = -1
+    return rsq
+
+
+def calccodStack(y, yhat):
+    """
+    [summary]
+
+    Args:
+        x ([type]): [description]
+        y ([type]): [description]
+    """
+    numruns = len(y)
+    nom = []
+    denom = []
+    for run in range(numruns):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            yrun = np.array(y[run])
+            yhatrun = np.array(yhat[run])
+            nom.append(np.sum((yrun - yhatrun) ** 2, axis=0))
+            denom.append(np.sum(yrun ** 2, axis=0))  # Kendricks denominator
+
+    nom = np.array(nom).sum(0)
+    denom = np.array(denom).sum(0)
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        f = np.nan_to_num(1 - nom / denom)
+
+    return f
 
 
 def linspacefixeddiff(x, d, n):
@@ -24,12 +67,11 @@ def linspacefixeddiff(x, d, n):
     return np.linspace(x, x2, n)
 
 
-def make_design(events, tr, data, hrf=None):
+def make_design(events, tr, rundata, hrf=None):
 
     # calc
-    ntimes = data.shape[0]
+    ntimes = rundata.shape[0]
     alltimes = linspacefixeddiff(0, tr, ntimes)
-    hrftimes = linspacefixeddiff(0, tr, len(hrf))
 
     # loop over conditions
     conditions = list(set(events.trial_type))
@@ -57,7 +99,7 @@ def make_design(events, tr, data, hrf=None):
             # record
             temp[:, i] = yvals
     else:
-
+        hrftimes = linspacefixeddiff(0, tr, len(hrf))
         # this will be time x conditions
         temp = np.zeros((ntimes, nconditions))
         for i, q in enumerate(conditions):
@@ -97,8 +139,9 @@ def mtimesStack(m1, m2):
     cnt = 0
     for q in range(nruns):
         nvols = m2[q].shape[0]
-        thiscol = cnt + list(range(nvols))
-        f = f + m1[:, thiscol] * m2[q]
+        thiscol = cnt + np.asarray(list(range(nvols)))
+        colrow = m1[:, thiscol] * m2[q]
+        f = f + colrow
         cnt = cnt + m2[q].shape[0]
 
     return f
@@ -133,23 +176,28 @@ def olsmatrix(X):
         [f]: 2D: parameters by Samples
     """
 
-    bad = np.all(X == 0, 1)
+    bad = np.all(X == 0, axis=0)
     good = np.invert(bad)
 
     # report warning
-    if any(bad):
+    if not np.any(good) == 0:
+        print(
+            "regressors are all zeros; we will estimate a 0 weight for those regressors."
+        )
+        f = np.zeros((X.shape[1], X.shape[0]))
+        return f
+
+    # do it
+    if np.any(bad):
         print(
             "One or more regressors are all zeros; we will estimate a 0 weight for those regressors."
         )
-
-    # do it
-    if any(bad):
         f = np.zeros((X.shape[1], X.shape[0]))
-
+        X = np.mat(X)
         f[good, :] = np.linalg.inv(X[:, good].T * X[:, good]) * X[:, good].T
 
     else:
-
+        X = np.mat(X)
         f = np.linalg.inv(X.T * X) * X.T
 
     return f
@@ -180,6 +228,8 @@ def optimiseHRF(
     numforhrf=50,
     hrfthresh=0.5,
     hrffitmask=1,
+
+
 ):
     """
     Optimise hrf from a selection of voxels.
@@ -189,7 +239,7 @@ def optimiseHRF(
 
     Args:
         events ([type]): [description]
-        data ([type]): [description]
+        data ([type]): note that data already had polynomials out
         tr ([type]): [description]
         hrfknobs ([type]): [description]
         combinedmatrix ([type]): [description]
@@ -230,6 +280,7 @@ def optimiseHRF(
     currenthrf = hrfknobs  # initialize
     cnt = 1
     while True:
+        print(f'\t optimising hrf :{cnt}\n')
 
         # fix the HRF, estimate the amplitudes
         if cnt % 2 == 1:
@@ -240,12 +291,11 @@ def optimiseHRF(
 
                 # get design matrix with HRF
                 # number of time points
-                convdes = make_design(events, data[p], tr, currenthrf)
+
+                convdes = make_design(design[p], tr, data[p], currenthrf)
 
                 # project the polynomials out
-                convdes = (
-                    get_poly_matrix(convdes.shape[0], [0, 1, 2, 3]) * convdes
-                )
+                convdes = combinedmatrix[p] * convdes
                 # time x conditions
 
                 convdesign.append(convdes)
@@ -257,14 +307,9 @@ def optimiseHRF(
             currentbeta = mtimesStack(olsmatrix(stackdesign), data)
 
             # calculate R^2
-            modelfit = [convdesign[x] * currentbeta for x in range(numruns)]
+            modelfit = [convdesign[p] * currentbeta for p in range(numruns)]
 
-            nom_denom = R2_nom_denom(modelfit, data)
-
-            with np.errstate(divide="ignore", invalid="ignore"):
-                nom = np.array(nom_denom).sum(0)[0, :]
-                denom = np.array(nom_denom).sum(0)[1, :]
-                R2 = np.nan_to_num(1 - nom / denom)
+            R2 = calccodStack(modelfit, data)
 
             # figure out indices of good voxels
             if hrffitmask == 1:
@@ -277,7 +322,7 @@ def optimiseHRF(
             temp[np.isnan(temp)] = -np.inf
             ii = np.argsort(temp)
             nii = len(ii)
-            iichosen = ii[np.max(1, nii - numforhrf + 1):nii]
+            iichosen = ii[np.max((1, nii - numforhrf)):nii]
             iichosen = np.setdiff1d(
                 iichosen, iichosen[temp[iichosen] == -np.inf]
             ).tolist()
@@ -295,7 +340,7 @@ def optimiseHRF(
                 # calc
 
                 # number of time points
-                ntime = design[p].shape[0]
+                ntime = data[p].shape[0]
 
                 # weight and sum based on the current amplitude estimates.
                 # only include the good voxels.
@@ -304,57 +349,51 @@ def optimiseHRF(
 
                 # remove polynomials and extra regressors
                 # time x L*voxels
-                convdes = convdes.reshape((ntime, numcond * nhrfvox))
+                convdes = convdes.reshape(
+                    (ntime, -1))
                 # time x L*voxels
-                convdes = combinedmatrix[p] * convdes
+                convdes = np.array(combinedmatrix[p] * convdes)
                 # time x voxels x L
-                convdes = convdes.reshape(ntime, numinhrf, nhrfvox)
+                convdes = convdes.reshape((ntime, numinhrf, nhrfvox))
                 convdesign.append(
-                    np.transpose(convdesign[p][:, :, None], (0, 2, 1))
+                    np.transpose(convdes, (0, 2, 1))
                 )
 
             # estimate the HRF
             previoushrf = currenthrf
-            datasubset = np.vstack(
+            datasubset = np.array(np.vstack(
                 [data[x][:, hrffitvoxels] for x in range(numruns)]
-            )
+            ))
 
             stackdesign = np.vstack(convdesign)
             ntime = stackdesign.shape[0]
 
             stackdesign = stackdesign.reshape((ntime * nhrfvox, numinhrf))
 
-            currenthrf = olsmatrix(stackdesign) * datasubset.Ravel()
+            currenthrf = olsmatrix(stackdesign) * datasubset.ravel()
             # currenthrf = OLS(stackdesign, datasubset.Ravel())
 
             # if HRF is all zeros (this can happen when the data are all zeros)
             # get out prematurely
             if np.all(currenthrf == 0):
+                print(f'current hrf went all to 0 after {cnt} attempts\n')
                 break
 
             # check for convergence
             # how much variance of the previous estimate does
             # the current one explain?
-            nom_denom = R2_nom_denom(previoushrf, currenthrf)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                nom = np.array(nom_denom).sum(0)[0, :]
-                denom = np.array(nom_denom).sum(0)[1, :]
-                hrfR2 = np.nan_to_num(1 - nom / denom)
+            hrfR2 = rsquared(previoushrf, currenthrf)
 
             if hrfR2 >= minR2 and cnt > 2:
                 break
 
-        cnt = +1
+        cnt += 1
 
     # sanity check
     # we want to see that we're not converging in a weird place
     # so we compute the coefficient of determination between the
     # current estimate and the seed hrf
-    nom_denom = R2_nom_denom(hrfknobs, previoushrf)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.array(nom_denom).sum(0)[0, :]
-        denom = np.array(nom_denom).sum(0)[1, :]
-        hrfR2 = np.nan_to_num(1 - nom / denom)
+    hrfR2 = rsquared(hrfknobs, previoushrf)
 
     # sanity check to make sure that we are not doing worse.
     if hrfR2 < hrfthresh:
