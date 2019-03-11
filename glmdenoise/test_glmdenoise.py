@@ -95,7 +95,7 @@ design = []
 maxpolydeg = []
 polynomials = []
 combinedmatrix = []
-n_runs = 2
+n_runs = 8
 stimdur = 0.5
 TR = 0.764
 
@@ -113,7 +113,7 @@ for ii in range(n_runs):
     n_vols = y.shape[0]
 
     # get polynomials
-    maxpolydeg.append(int(((n_vols * TR) / 60) // 2))
+    maxpolydeg.append(int(((n_vols * TR) / 60) // 2)+1)
 
     pmatrix = gpm.constructpolynomialmatrix(
         n_vols, list(range(maxpolydeg[ii])))
@@ -154,7 +154,7 @@ for ii in range(n_runs):
         # this is because we need the event deltas design matrix
         design.append(events)
     else:
-        X = ohrf.make_design(events, TR, data[ii], hrf)
+        X = ohrf.make_design(events, TR, n_vols, hrf)
         design.append(X)
 
 if opt['hrfmodel'] == 'optimise':
