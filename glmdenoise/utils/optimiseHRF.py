@@ -1,24 +1,149 @@
 import numpy as np
-from utils.stimMat import constructStimulusMatrices
-from utils.R2_nom_denom import R2_nom_denom
 from scipy.interpolate import pchip
-from pdb import set_trace
 
 
-def rsquared(y, yhat):
-    y = np.array(y)
-    yhat = np.array(yhat)
+def crossval(design, data, polynomials, verbose=None):
+    """ cross-validated R2
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        # denom = np.sum((y - y.mean(axis=0)) ** 2,
-        #               axis=0)  # correct denominator
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-        rsq = np.nan_to_num(1 - nom / denom)
+    Args:
+        design ([type]): whitened design
+        data ([type]): whitened data
+        polynomials ([type]): whitening matrix
+        verbose ([type], optional): Defaults to None. keep quiet.
 
-    # remove inf-values because we might have voxels outside the brain
-    rsq[rsq < -1] = -1
-    return rsq
+    Returns:
+        f (dict): dictionary of results with keys:
+            ["R2"]: cross-validated R2
+            ["R2run"]: R2 for each run
+    """
+    from itertools import compress
+
+    numruns = len(design)
+    betas = []
+    whitemodelfit = []
+    R2run = []
+    if verbose is not None:
+        print('cross-validating model')
+    for p in range(numruns):
+        mask = np.arange(numruns) != p
+
+        # stack the training design matrices
+        stackdesign = np.vstack(list(compress(design, mask)))
+
+        # get the training betas
+        betas.append(mtimesStack(olsmatrix(
+            stackdesign), list(compress(data, mask))))
+
+        # get the predicted responses
+        modelfit = np.dot(design[p], betas[p])
+
+        # remove polynomials from the modelfits
+        whitemodelfit.append(np.dot(polynomials[p], modelfit))
+
+        # calculate run-wise R2
+        R2run.append(calccodStack(data[p], whitemodelfit[p]))
+
+    # calculate overall R2
+    R2 = calccodStack(data, whitemodelfit)
+
+    # prepare output
+    f = dict()
+    f['R2'] = R2
+    f['R2run'] = R2run
+
+    return f
+
+
+def constructStimulusMatrices(m, prenumlag=0, postnumlag=0, wantwrap=0):
+    """construc stimulus matrices from design matrix m
+
+    Args:
+
+        m ([2d matrix]): is a 2D matrix, each row of which is a stimulus
+            sequence (i.e. a vector that is all zeros except for ones
+            indicating the onset of a given stimulus (fractional values
+            are also okay))
+
+        prenumlag (bool or int, optional): Defaults to False. number of
+            stimulus points in the past
+
+        postnumlag (bool or int, optional): Defaults to False. number of
+            stimulus points in the future
+
+        wantwrap (bool, optional): Defaults to False. whether to wrap
+            around
+    Returns:
+        [2d matrix]: a stimulus matrix of dimensions
+            size(m,2) x ((prenumlag+postnumlag+1)*size(m,1)).
+            this is a horizontal concatenation of the stimulus
+            matrix for the first stimulus sequence, the stimulus
+            matrix for the second stimulus sequence, and so on.
+            this function is useful for fitting finite impulse
+            response (FIR) models.
+    """
+
+    # make sure m is numpy
+    m = np.asarray(m)
+
+    # get out early
+    if not prenumlag and not postnumlag:
+        f = m.T
+        return f
+    else:
+        nconds, nvols = m.shape
+
+        # do it
+        num = prenumlag + postnumlag + 1
+        f = np.zeros((nvols, num*nconds))
+        for p in range(nconds):
+            i = p + 1
+            thiscol = (i - 1) * num + np.array(range(num))
+            f[:, thiscol] = constructStimulusMatrix(
+                m[p, :], prenumlag, postnumlag, wantwrap
+            )
+
+    return f
+
+
+def constructStimulusMatrix(v, prenumlag, postnumlag, wantwrap=0):
+    """Construct stimulus matrix from design vector
+
+    Args:
+
+        v ([1d vector]): v is the stimulus sequence represented as a vector
+
+        prenumlag ([int]): this is the number of stimulus points in the past
+
+        postnumlag ([int]): this is the number of stimulus points in the future
+
+        wantwrap (int, optional): Defaults to 0. whether to wrap around
+
+
+    Returns:
+        [2d array]: return a stimulus matrix of dimensions
+            length(v) x (prenumlag+postnumlag+1)
+            where each column represents the stimulus at
+            a particular time lag.
+    """
+    v = np.asarray(v)
+    total = prenumlag + postnumlag + 1
+    f = np.zeros((len(v), total))
+    for p in range(total):
+        i = p + 1
+        if False:
+            pass
+            # shift = [0 - prenumlag + (p-1)]
+            # f[:, p] = np.roll(v, shift, axis=(0, 1)).T
+        else:
+            temp = -prenumlag + (i - 1)
+            if temp < 0:
+                pass
+                # vindx = range(len(v), 1 - temp)
+                # findx = range(len(v)+temp)
+                # f[findx, p] = v[vindx]
+            else:
+                f[temp:, p] = v[: len(v) - temp]
+    return f
 
 
 def calccod(x, y, wantgain=0, wantmeansub=1):
@@ -331,17 +456,50 @@ def optimiseHRF(
     like approach.
 
     Args:
-        events ([type]): [description]
-        data ([type]): note that data already had polynomials out
-        tr ([type]): [description]
-        hrfknobs ([type]): [description]
-        combinedmatrix ([type]): [description]
-        numforhrf (int, optional): Defaults to 50. [description]
-        hrfthresh (float, optional): Defaults to .5. [description]
+        design (pandas dataframe): this is a pandas data frame with keys:
+                ['trial_type']: stimulus condition index
+                ['onset']: onsets in s for each event
+                ['duration']: duration for each event
+
+        data (2d array): data (time x vox). this data should already
+                have polynomials projected out.
+
+        tr (float): the sampling rate in seconds
+
+        hrfknobs (1d array):should be time x 1 with the initial seed
+                for the HRF.  The length of this vector indicates the
+                number of time points that we will attempt to estimate
+                in the HRF.
+
+                Note on normalization: after fitting the HRF, we
+                normalize the HRF to peak at 1 (and adjust amplitudes
+                accordingly).
+
+        combinedmatrix (stack of 2d arrays): projection matrix of the
+                polynomials and extra regressors (if passed by user).
+                This is used to whiten the design matrix.
+
+        numforhrf (int, optional): Defaults to 50.
+                is a positive integer indicating the number of voxels
+                (with the best R^2 values) to consider in fitting the
+                global HRF.  (If there are fewer than that number of
+                voxels available, we just use the voxels that are
+                available.)
+
+        hrfthresh (float, optional): Defaults to .5.
+                If the R^2 between the estimated HRF and the initial HRF
+                is less than <hrfthresh>, we decide to just use the initial
+                HRF. Set <hrfthresh> to -Inf if you never want to reject
+                the estimated HRF.
 
     Returns:
-        [Dict]: we return the hrf and the indices of the v
-                oxels used to fit the hrf
+        [Dict]: we return a dictionary with kers:
+                ["hrf"]: the optimised hrf (but see note above on hrfthresh)
+                ["hrffitvoxels"]: the indices of the voxels used to fit.
+                ["convdesign"]: the design convolved with the optimised hrf
+                                and polynomials projected out.
+                ["seedhrf"]: we return the seed hrf for book keeping.
+
     """
 
     minR2 = 0.99
@@ -482,7 +640,6 @@ def optimiseHRF(
             # the current one explain?
             hrfR2 = calccod(previoushrf, currenthrf)
 
-            # if hrfR2 >= minR2 and cnt > 2: <--bring back after testing
             if (hrfR2 >= minR2 and cnt > 2):
                 break
 
@@ -501,9 +658,23 @@ def optimiseHRF(
             "probably indicating low SNR.  We are just going to"
             "use the initial seed as the HRF estimate.\n"
         )
+        # prepare design matrix
+        convdesign = []
+        for p in range(numruns):
+            # get design matrix with HRF
+            # number of time points
+            convdes = make_design(design[p], tr, ntimes[p], hrfknobs)
+
+            # project the polynomials out
+            convdes = np.dot(combinedmatrix[p], convdes)
+            # time x conditions
+
+            convdesign.append(convdes)
         f = dict()
         f["hrf"] = hrfknobs
         f["hrffitvoxels"] = None
+        f["convdesign"] = convdesign
+        f["seedhrf"] = hrfknobs
         return f
 
     # normalize results
@@ -511,8 +682,23 @@ def optimiseHRF(
     previoushrf = previoushrf / mx
     currentbeta = currentbeta * mx
 
+    # prepare design matrix
+    convdesign = []
+    for p in range(numruns):
+        # get design matrix with HRF
+        # number of time points
+        convdes = make_design(design[p], tr, ntimes[p], previoushrf)
+
+        # project the polynomials out
+        convdes = np.dot(combinedmatrix[p], convdes)
+        # time x conditions
+
+        convdesign.append(convdes)
+
     # return
     f = dict()
     f["hrf"] = previoushrf
     f["hrffitvoxels"] = hrffitvoxels
+    f["convdesign"] = convdesign
+    f["seedhrf"] = hrfknobs
     return f

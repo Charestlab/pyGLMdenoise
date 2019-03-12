@@ -3,67 +3,16 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from itertools import compress
 import warnings
 from utils import get_poly_matrix as gpm
 from utils import optimiseHRF as ohrf
 from utils.getcanonicalhrf import getcanonicalhrf
 from utils.normalisemax import normalisemax
-import scipy.io as sio
+from scipy.sparse.linalg import svds
+from sklearn.preprocessing import normalize
+
+# import scipy.io as sio
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-def fit_separate_runs(runs, DM, extra_regressors=False):
-
-    # run_lens = [r.shape[0] for r in runs]
-    # constants = get_constants(run_lens)
-    if extra_regressors and extra_regressors[0].any():
-
-        for i, (y, X) in enumerate(zip(runs, DM)):
-            X = np.c_[X, extra_regressors[i]]
-            polynomials = gpm.constructpolynomialmatrix(
-                X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = gpm.projectionmatrix(polynomials) * y
-            DM[i] = gpm.constructpolynomialmatrix(polynomials) * X
-        # n_regs = extra_regressors[0].shape[1]
-        # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
-        X = np.vstack(DM)
-        y = np.vstack(runs)
-        # X = np.c_[X, constants]
-
-        # regs = np.vstack(extra_regressors)
-        # X = np.c_[X, regs]
-
-        betas = sm.OLS(y, X).fit().params
-
-        # for run, X, reg in zip(runs,DM, extra_regressors):
-        #     X = np.c_[X, reg]
-        #     polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-        #     run = make_project_matrix(polynomials) * run
-        #     X = make_project_matrix(polynomials) * X
-        #     betas += sm.OLS(run, X).fit().params
-    else:
-        for i, (y, X) in enumerate(zip(runs, DM)):
-            polynomials = gpm.constructpolynomialmatrix(
-                X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = gpm.projectionmatrix(polynomials) * y
-            DM[i] = gpm.make_project_matrix(polynomials) * X
-        betas = np.zeros((DM[0].shape[1], runs[0].shape[1]))
-
-        # n_regs = extra_regressors[0].shape[1]
-        # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
-        X = np.vstack(DM)
-        # X = np.c_[X, constants]
-        y = np.vstack(runs)
-
-        betas = sm.OLS(y, X).fit().params
-
-        # for run, X in zip(runs,DM):
-        #     polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-        #     run = np.mat(make_project_matrix(polynomials) * run)
-        #     X = np.mat(make_project_matrix(polynomials) * X)
-        #     betas += sm.OLS(run, X).fit().params
-    return betas
 
 
 def get_constants(run_lens):
@@ -91,6 +40,7 @@ opt['extraregressors'] = None
 
 
 data = []
+whitedata = []
 design = []
 maxpolydeg = []
 polynomials = []
@@ -100,7 +50,7 @@ stimdur = 0.5
 TR = 0.764
 
 # initialise hrf
-hrf = normalisemax(getcanonicalhrf(stimdur, TR))
+seedhrf = normalisemax(getcanonicalhrf(stimdur, TR))
 
 for ii in range(n_runs):
     # load the data and append
@@ -109,20 +59,20 @@ for ii in range(n_runs):
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
-    # sio.savemat(f'data_run{ii+1}.mat', {'data': y})
+    # append the non-whitened data
+    data.append(y)
 
     # get n volumes
     n_vols = y.shape[0]
 
     # get polynomials
     maxpolydeg.append(int(((n_vols * TR) / 60) // 2)+1)
-
     pmatrix = gpm.constructpolynomialmatrix(
         n_vols, list(range(maxpolydeg[ii])))
-
     polynomials.append(gpm.projectionmatrix(pmatrix))
 
-    data.append(polynomials[ii] * y)
+    # append the whithened data
+    whitedata.append(polynomials[ii] * y)
 
     # handle extra regressors
     if opt['extraregressors'] is not None:
@@ -132,9 +82,6 @@ for ii in range(n_runs):
         #         np.concatenate(pmatrix, opt['extraregressors'][ii], axis=1)))
     else:
         combinedmatrix.append(polynomials[ii])
-
-    # work on events and design
-    frame_times = np.arange(n_vols) * TR
 
     # Load onsets and item presented
     onsets = pd.read_csv(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.csv")[
@@ -151,82 +98,46 @@ for ii in range(n_runs):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    Xtemp = ohrf.make_design(events, TR, n_vols)
-    sio.savemat(f'data/design_run{ii+1}.mat', {'design': Xtemp})
-
     if opt['hrfmodel'] == 'optimise':
         # if optimise hrf, we pass the design as a stack of events pandas
         # this is because we need the event deltas design matrix
         design.append(events)
     else:
-        X = ohrf.make_design(events, TR, n_vols, hrf)
-        design.append(X)
+        X = ohrf.make_design(events, TR, n_vols, seedhrf)
+        design.append(np.dot(combinedmatrix[ii], X))
+
 
 if opt['hrfmodel'] == 'optimise':
     hrfparams = ohrf.optimiseHRF(design,
-                                 data,
+                                 whitedata,
                                  TR,
-                                 hrf,
+                                 seedhrf,
                                  combinedmatrix)
-else:
-    pass
+    # update hrf and design
+    hrf = hrfparams["hrf"]
+    design = hrfparams["convdesign"]
+elif opt['hrfmodel'] == 'assume':
+    # case assume. update hrfparams for book keeping
+    hrfparams = dict()
+    hrfparams["hrf"] = seedhrf
+    hrfparams["convdesign"] = design
 
-    # kendricks formula for the number of degrees to use
-maxpolydeg = int(((data[0].shape[0] * TR) / 60) // 2)
 # mean data and mask
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])
 mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 
-"""
-Get initial fit to select noise pool
-"""
-preds = []
-nom_denom = []
-r2s = []
-for run in range(n_runs):
-    # fit data using all the other runs
-    mask = np.arange(n_runs) != run
-    betas = fit_separate_runs(
-        list(compress(data, mask)), list(compress(design, mask))
-    )
+results = ohrf.crossval(design, whitedata, polynomials)
 
-    # left out data
-    # project out polynomials
-    polynomials = get_poly_matrix(design[run].shape[0], [0, 1, 2, 3, 4])
-    this_design = make_project_matrix(polynomials) * design[run]
-    yhat = np.mat(this_design.dot(betas))
-
-    y = np.mat(data[run])
-    # project out polynomials
-    y = make_project_matrix(polynomials) * y
-
-    nom, denom = R2_nom_denom(np.array(y), np.array(yhat))
-    r2s.append(rsquared(np.array(y), np.array(yhat)))
-    preds.append(np.array(yhat))
-    nom_denom.append((nom, denom))
-
-"""
-Calculate R2s
-"""
-with np.errstate(divide="ignore", invalid="ignore"):
-    nom = np.array(nom_denom).sum(0)[0, :]
-    denom = np.array(nom_denom).sum(0)[1, :]
-    r2s_vanilla = np.nan_to_num(1 - nom / denom)
-
-"""
-Plot R-squares
-"""
-# r2s_vanilla = np.vstack(r2s).mean(0)
+# check with a figure
 fig, ax = plt.subplots(1, 2, figsize=(8, 3))
+sns.distplot(results['R2'], color="green", ax=ax[0])
 
-sns.distplot(r2s_vanilla, color="green", ax=ax[0])
-# sns.distplot(r2_full_data, color='red', ax=ax[0])
-
-plt_img = r2s_vanilla.copy()
+plt_img = results['R2'].copy()
 # plt_img[plt_img < 0.2] = 0
 sns.heatmap(
     plt_img.reshape((80, 80)),
-    mask=~mean_mask,
+    # mask=~mean_mask,
+    cmap="hot",
     ax=ax[1],
     xticklabels=False,
     yticklabels=False,
@@ -244,25 +155,33 @@ sns.heatmap(best_vox.reshape(
 """
 mask = mean_mask.reshape(-1)
 # noise_pool_mask = (r2s_vanilla < 0) & mask
-noise_pool_mask = (r2s_vanilla < np.percentile(r2s_vanilla[mask], 5)) & mask
-noise_pool_mask = (r2s_vanilla < 0) & (
+noise_pool_mask = (results['R2'] < np.percentile(
+    results['R2'][mask], 5)) & mask
+noise_pool_mask = (results['R2'] < 0) & (
     mean_image.reshape(-1)
     > np.percentile(mean_image[mean_mask].flatten(), 99) / 2
 )
+
+# show the noisepool
+volpool = np.zeros((6400))
+volpool[noise_pool_mask] = 1
+sns.heatmap(volpool.reshape((80, 80)))
+plt.show()
+
 best_vox = (
-    r2s_vanilla > 0
+    results['R2'] > 0
 )  # (r2s_vanilla > np.percentile(r2s_vanilla,95)) & mask
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:]),
+    results['R2'].reshape(*dims[1:]),
     mask=~noise_pool_mask.reshape(*dims[1:]),
     xticklabels=False,
     yticklabels=False,
     ax=ax[0],
 )
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:]),
+    results['R2'].reshape(*dims[1:]),
     mask=~best_vox.reshape(*dims[1:]),
     xticklabels=False,
     yticklabels=False,
@@ -279,12 +198,15 @@ calculate cross-validated fit
 
 # split PCAs
 run_PCAs = []
-for run in data:
+for q, run in enumerate(data):
     noise_pool = run[:, noise_pool_mask]
+    white_pool = np.dot(polynomials[q], noise_pool)
+    white_pool = normalize(white_pool, axis=1)
     # polynomials = get_poly_matrix(noise_pool.shape[0], [0, 1, 2, 3, 4])
     # noise_pool = make_project_matrix(polynomials) * noise_pool
-    pcas = PCA(20).fit_transform(noise_pool)
-    run_PCAs.append(pcas)
+    u, s, vt = svds(np.mat(white_pool) * np.mat(white_pool.T), k=20)
+    u = u / np.std(u, 0)
+    run_PCAs.append(u)
 
 pca_r2 = []
 mean_r2 = []
