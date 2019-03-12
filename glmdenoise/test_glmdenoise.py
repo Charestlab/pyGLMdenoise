@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -11,7 +10,7 @@ from utils.getcanonicalhrf import getcanonicalhrf
 from utils.normalisemax import normalisemax
 from scipy.sparse.linalg import svds
 from sklearn.preprocessing import normalize
-
+from select_noise_regressors import select_noise_regressors
 # import scipy.io as sio
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -38,7 +37,8 @@ def get_constants(run_lens):
 opt = {}
 opt['hrfmodel'] = 'optimise'
 opt['extraregressors'] = None
-
+opt['pcR2cutoff'] = 0
+opt['pcR2cutoffmask'] = 1
 
 data = []
 whitedata = []
@@ -164,7 +164,7 @@ mask = mean_mask.reshape(-1)
 # noise_pool_mask = (r2s_vanilla < 0) & mask
 noise_pool_mask = (results['R2'] < np.percentile(
     results['R2'][mask], 5)) & mask
-noise_pool_mask = (results['R2'] < 0) & (
+noise_pool_mask = (results['R2'] < opt['pcR2cutoff']) & (
     mean_image.reshape(-1)
     > np.percentile(mean_image[mean_mask].flatten(), 99) / 2
 )
@@ -176,7 +176,7 @@ sns.heatmap(volpool.reshape((80, 80)))
 plt.show()
 
 best_vox = (
-    results['R2'] > 0
+    results['R2'] > opt['pc']
 )  # (r2s_vanilla > np.percentile(r2s_vanilla,95)) & mask
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -208,73 +208,43 @@ run_PCAs = []
 for q, run in enumerate(data):
     noise_pool = run[:, noise_pool_mask]
     white_pool = np.dot(polynomials[q], noise_pool)
-    white_pool = normalize(white_pool, axis=1)
+    white_pool = np.mat(normalize(white_pool, axis=1))
     u, s, vt = np.linalg.svd(white_pool * white_pool.T)  # * noise_pool.T)
     u = u[:, :20]
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
+pcR2 = []
 for n_pca in range(20):
+    print('cross-validating model with {} PCs...'.format(n_pca+1))
     r2s = []
-    modelfits = []
+    pccombinedmatrix = []
+    whitepcdata = []
+    whitepcdesign = []
     for run in range(n_runs):
-        # fit data using all the other runs
-        mask = np.arange(n_runs) != run
+        # collect all the pcs and the projected data
+        pctrain = run_PCAs[run][:, :n_pca]
+        pmat = pmatrices[run]
+        pmatcombined = gpm.projectionmatrix(
+            np.c_[pmat, pctrain])
+        pccombinedmatrix.append(pmatcombined)
+        whitepcdata.append(np.dot(pmatcombined, data[run]))
+        whitepcdesign.append(np.dot(pmatcombined, design[run]))
 
-        trainIndices = np.where(mask)[0]
+    pcresults = ohrf.crossval(whitepcdesign, whitepcdata, pccombinedmatrix)
+    pcR2.append(pcresults["R2"])
 
-        # whiten the design and data with pc regressors
-        pccombinedmatrix = []
-        whitetraindata = []
-        whitetraindesign = []
-        for ti in trainIndices:
-            pctrain = run_PCAs[ti][:, :n_pca]
-            pmat = pmatrices[ti]
-            pmatcombined = gpm.projectionmatrix(
-                np.c_[pmat, pctrain])
-            pccombinedmatrix.append(pmatcombined)
-            whitetraindata.append(np.dot(pmatcombined, data[ti]))
-            whitetraindesign.append(np.dot(pmatcombined, design[ti]))
+# vertical stack of the PCR2
+pcR2stack = np.vstack(pcR2)
 
-        stackdesign = np.vstack(whitetraindesign)
+# find the voxels that break the cutoff
+pcvoxels = np.any(pcR2stack > opt['pcR2cutoff'], axis=0)
 
-        betas = ohrf.mtimesStack(ohrf.olsmatrix(stackdesign), whitetraindata)
+xval = np.nanmedian(pcR2stack[:, pcvoxels], 1)
+select_pca = select_noise_regressors(np.asarray(xval))
 
-        # whiten the left out design
-        whitetestdesign = np.dot(gpm.projectionmatrix(
-            np.c_[pmatrices[run], run_PCAs[run][:, :n_pca]]), design[run])
-
-        modelfit = np.dot(whitetestdesign, betas)
-        modelfits.append(modelfit)
-
-    # now we whiten the modelfits
-
-    calccodStack(data[p], modelfitwhitemodelfit[p])
-
-    # project out polynomials
-    y = make_project_matrix(polynomials) * data[run]
-    y, yhat = np.asarray(y), np.asarray(yhat)
-
-    nom, denom = R2_nom_denom(y, yhat)
-    nom_denom.append((nom, denom))
-    r2s.append(rsquared(y, yhat))
-
-    mean_r2.append(np.median(np.vstack(r2s).mean(0)[best_vox]))
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.array(nom_denom).sum(0)[0, :]
-        denom = np.array(nom_denom).sum(0)[1, :]
-        r2s = np.nan_to_num(1 - nom / denom)
-    all_r2s.append(r2s)
-    pca_r2.append(np.median(r2s[best_vox]))
-
-all_r2s = np.array(all_r2s)  # npc x voxel
-best_mask = np.any(all_r2s > 0, 0) & mean_mask.flatten()
-xval = np.median(all_r2s[:, best_mask], 1)
-xval = np.median(all_r2s[:, all_r2s.mean(0) > 0], 1)
-select_pca = select_noise_regressors(np.asarray(pca_r2))
-
-plt.plot(pca_r2)
-plt.plot(select_pca, pca_r2[select_pca], "o")
+plt.plot(xval)
+plt.plot(select_pca, xval[select_pca], "o")
 plt.show()
 
 
