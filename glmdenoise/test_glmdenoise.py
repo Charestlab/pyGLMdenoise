@@ -9,7 +9,7 @@ from utils import get_poly_matrix as gpm
 from utils import optimiseHRF as ohrf
 from utils.getcanonicalhrf import getcanonicalhrf
 from utils.normalisemax import normalisemax
-
+import scipy.io as sio
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -109,6 +109,8 @@ for ii in range(n_runs):
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
+    # sio.savemat(f'data_run{ii+1}.mat', {'data': y})
+
     # get n volumes
     n_vols = y.shape[0]
 
@@ -148,6 +150,9 @@ for ii in range(n_runs):
     events["duration"] = [stimdur] * n_events
     events["onset"] = onsets
     events["trial_type"] = items
+
+    Xtemp = ohrf.make_design(events, TR, n_vols)
+    sio.savemat(f'data/design_run{ii+1}.mat', {'design': Xtemp})
 
     if opt['hrfmodel'] == 'optimise':
         # if optimise hrf, we pass the design as a stack of events pandas

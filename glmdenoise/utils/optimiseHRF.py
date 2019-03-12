@@ -179,13 +179,15 @@ def make_design(events, tr, ntimes, hrf=None):
 
     if hrf is None:
 
-        onsets = np.array(events['onset'].values/tr).astype(int)
+        for i, q in enumerate(conditions):
 
-        event = events['trial_type'].values
-
-        for i in range(1, nconditions):
-            dm[onsets[np.where(event == i)[0]]-1, i-1] = 1
-        return dm
+            # onset times for qth condition in run p
+            otimes = np.array(
+                events.loc[events['trial_type'] == q, 'onset'].values/tr).astype(int)
+            yvals = np.zeros((ntimes))
+            for r in otimes:
+                yvals[r] = 1
+            dm[:, i] = yvals
 
     else:
         # calc
@@ -230,7 +232,7 @@ def mtimesStack(m1, m2):
     for q in range(nruns):
         nvols = m2[q].shape[0]
         thiscol = cnt + np.asarray(list(range(nvols)))
-        colrow = m1[:, thiscol] * m2[q]
+        colrow = np.dot(m1[:, thiscol], m2[q])
         f = f + colrow
         cnt = cnt + m2[q].shape[0]
 
@@ -284,11 +286,12 @@ def olsmatrix(X):
         )
         f = np.zeros((X.shape[1], X.shape[0]))
         X = np.mat(X)
-        f[good, :] = np.linalg.inv(X[:, good].T * X[:, good]) * X[:, good].T
+        f[good, :] = np.dot(np.linalg.inv(
+            np.dot(X[:, good].T, X[:, good])), X[:, good].T)
 
     else:
         X = np.mat(X)
-        f = np.linalg.inv(X.T * X) * X.T
+        f = np.dot(np.linalg.inv(np.dot(X.T, X)), X.T)
 
     return f
 
@@ -369,7 +372,7 @@ def optimiseHRF(
         )
 
         # time*L x conditions
-        convdesignpre.append(stimmat.reshape(numinhrf * ntimes[p], numcond))
+        convdesignpre.append(stimmat.reshape(-1, numcond, order='F'))
 
     # loop until convergence
     currenthrf = hrfknobs  # initialize
@@ -390,7 +393,7 @@ def optimiseHRF(
                 convdes = make_design(design[p], tr, ntimes[p], currenthrf)
 
                 # project the polynomials out
-                convdes = combinedmatrix[p] * convdes
+                convdes = np.dot(combinedmatrix[p], convdes)
                 # time x conditions
 
                 convdesign.append(convdes)
@@ -402,7 +405,8 @@ def optimiseHRF(
             currentbeta = mtimesStack(olsmatrix(stackdesign), data)
 
             # calculate R^2
-            modelfit = [convdesign[p] * currentbeta for p in range(numruns)]
+            modelfit = [np.dot(convdesign[p], currentbeta)
+                        for p in range(numruns)]
 
             R2 = calccodStack(data, modelfit)
 
@@ -436,16 +440,17 @@ def optimiseHRF(
                 # weight and sum based on the current amplitude estimates.
                 # only include the good voxels.
                 # return shape time*L x voxels
-                convdes = convdesignpre[p] * currentbeta[:, hrffitvoxels]
+                convdes = np.dot(
+                    convdesignpre[p], currentbeta[:, hrffitvoxels])
 
                 # remove polynomials and extra regressors
                 # time x L*voxels
                 convdes = convdes.reshape(
-                    (ntimes[p], -1))
+                    (ntimes[p], -1), order='F')
                 # time x L*voxels
-                convdes = np.array(combinedmatrix[p] * convdes)
+                convdes = np.array(np.dot(combinedmatrix[p], convdes))
                 # time x voxels x L
-                convdes = convdes.reshape((ntimes[p], numinhrf, nhrfvox))
+                convdes = convdes.reshape((ntimes[p], numinhrf, -1), order='F')
                 convdesign.append(
                     np.transpose(convdes, (0, 2, 1))
                 )
@@ -459,9 +464,11 @@ def optimiseHRF(
             stackdesign = np.vstack(convdesign)
             ntime = stackdesign.shape[0]
 
-            stackdesign = stackdesign.reshape((ntime * nhrfvox, numinhrf))
+            stackdesign = stackdesign.reshape(
+                (ntime * nhrfvox, numinhrf), order='F')
             stackdesign = olsmatrix(stackdesign)
-            currenthrf = stackdesign.dot(datasubset.ravel())
+            currenthrf = np.asarray(stackdesign.dot(
+                datasubset.reshape((-1), order='F')))[0]
             # currenthrf = OLS(stackdesign, datasubset.Ravel())
 
             # if HRF is all zeros (this can happen when the data are all zeros)
@@ -476,7 +483,7 @@ def optimiseHRF(
             hrfR2 = calccod(previoushrf, currenthrf)
 
             # if hrfR2 >= minR2 and cnt > 2: <--bring back after testing
-            if (hrfR2 >= minR2 and cnt > 2) or cnt > 10:
+            if (hrfR2 >= minR2 and cnt > 2):
                 break
 
         cnt += 1
