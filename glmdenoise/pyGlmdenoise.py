@@ -11,6 +11,10 @@ from tqdm import tqdm
 import warnings
 from utils.get_poly_matrix import *
 import numpy
+from scipy.sparse.linalg import svd
+
+warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -26,16 +30,14 @@ def rsquared(y, yhat):
     rsq[rsq < -1] = -1
     return rsq
 
-
-def fit_separate_runs(runs, DM, extra_regressors=False):
-
-    # run_lens = [r.shape[0] for r in runs]
-    # constants = get_constants(run_lens)
+def fit_separate_runs(runs, DM, extra_regressors = False):
+    #run_lens = [r.shape[0] for r in runs]
+    #constants = get_constants(run_lens)
     if extra_regressors and extra_regressors[0].any():
 
         for i, (y, X) in enumerate(zip(runs, DM)):
-            X = np.c_[X, extra_regressors[i]]
             polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
+            X = np.c_[X, extra_regressors[i]]
             runs[i] = make_project_matrix(polynomials) * y
             DM[i] = make_project_matrix(polynomials) * X
         # n_regs = extra_regressors[0].shape[1]
@@ -117,7 +119,7 @@ design = []
 n_runs = 6
 for ii in range(n_runs):
     y = np.load(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.npy")
-    y = np.swapaxes(y, 0, 2)
+    y = np.moveaxis(y, 2,0)
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
@@ -188,27 +190,46 @@ Calculate R2s
 with np.errstate(divide="ignore", invalid="ignore"):
     nom = np.array(nom_denom).sum(0)[0, :]
     denom = np.array(nom_denom).sum(0)[1, :]
-    r2s_vanilla = np.nan_to_num(1 - nom / denom)
+    r2s_vanilla = np.nan_to_num(1 - nom / denom)*100
 
 """
 Plot R-squares
 """
 # r2s_vanilla = np.vstack(r2s).mean(0)
-fig, ax = plt.subplots(1, 2, figsize=(8, 3))
+fig, ax = plt.subplots(2, 2, figsize=(8, 6))
+ax = ax.flatten()
 
 sns.distplot(r2s_vanilla, color="green", ax=ax[0])
-# sns.distplot(r2_full_data, color='red', ax=ax[0])
 
-plt_img = r2s_vanilla.copy()
+ax[0].set_title('Python R2 distribution')
+
 # plt_img[plt_img < 0.2] = 0
 sns.heatmap(
-    plt_img.reshape((80, 80)),
-    mask=~mean_mask,
+    r2s_vanilla.reshape((80, 80), order='F'),
+    #mask=~mean_mask,
     ax=ax[1],
     xticklabels=False,
     yticklabels=False,
     square=True,
 )
+
+ax[1].set_title('Python R2 brain')
+matlab_r2 = loadmat('../r2.mat')['pcR2']
+
+sns.distplot(np.nan_to_num(matlab_r2.flatten()), color="green", ax=ax[2])
+ax[2].set_title('Matlab R2 distribution')
+
+# plt_img[plt_img < 0.2] = 0
+sns.heatmap(
+    np.nan_to_num(matlab_r2),
+    #mask=~mean_mask,
+    ax=ax[3],
+    xticklabels=False,
+    yticklabels=False,
+    square=True,
+)
+ax[3].set_title('Matlab R2 brain')
+plt.tight_layout()
 plt.show()
 
 """
@@ -217,66 +238,99 @@ plots noise pool
 sns.heatmap(noise_pool_mask.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
 sns.heatmap(best_vox.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
 """
-mask = mean_mask.reshape(-1)
+mask_flat = mean_mask.reshape(-1, order='F')
 # noise_pool_mask = (r2s_vanilla < 0) & mask
-noise_pool_mask = (r2s_vanilla < np.percentile(r2s_vanilla[mask], 5)) & mask
-noise_pool_mask = (r2s_vanilla < 0) & (
-    mean_image.reshape(-1)
-    > np.percentile(mean_image[mean_mask].flatten(), 99) / 2
-)
+noise_pool_mask = (r2s_vanilla < 0) & mask_flat
 best_vox = (
     r2s_vanilla > 0
 )  # (r2s_vanilla > np.percentile(r2s_vanilla,95)) & mask
 
+matlab_noise = loadmat('../noise.mat')['noisepool'].astype(bool)
+
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:]),
+    r2s_vanilla.reshape(*dims[1:], order='F'),
     mask=~noise_pool_mask.reshape(*dims[1:]),
     xticklabels=False,
     yticklabels=False,
     ax=ax[0],
 )
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:]),
-    mask=~best_vox.reshape(*dims[1:]),
+    r2s_vanilla.reshape(*dims[1:], order='F'),
+    mask=~matlab_noise,
     xticklabels=False,
     yticklabels=False,
     ax=ax[1],
 )
-ax[0].set_title("Noise pool")
-ax[1].set_title("best voxels")
+ax[0].set_title("Numpy noise pool")
+ax[1].set_title("Matlab noise pool")
 plt.show()
 
 """
 Loop over number of PCAs
 calculate cross-validated fit
 """
+matlab_pca = loadmat('../first_pca.mat')['a']
 
 # split PCAs
 run_PCAs = []
 for run in data:
-    noise_pool = run[:, noise_pool_mask]
-    # polynomials = get_poly_matrix(noise_pool.shape[0], [0, 1, 2, 3, 4])
-    # noise_pool = make_project_matrix(polynomials) * noise_pool
-    pcas = PCA(20).fit_transform(noise_pool)
-    run_PCAs.append(pcas)
+    noise_pool = run[:, matlab_noise.flatten(order='F')]
+
+    polynomials = get_poly_matrix(noise_pool.shape[0], [0, 1, 2, 3, 4])
+    noise_pool = make_project_matrix(polynomials) * np.mat(noise_pool)
+
+    noise_pool = np.mat(normalize(noise_pool,axis=0))
+
+    u, s, Vh = svd(noise_pool * noise_pool.T)#, lapack_driver='gesvd')
+    u, s, vt = np.linalg.svd(noise_pool* noise_pool.T)# * noise_pool.T)
+    u =  u[:,:20]
+    u = u / np.std(u, 0)
+    run_PCAs.append(u)
+
+fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+sns.heatmap(
+    run_PCAs[0],
+    xticklabels=False,
+    yticklabels=False,
+    ax=ax[0],
+)
+sns.heatmap(
+    matlab_pca,
+    xticklabels=False,
+    yticklabels=False,
+    ax=ax[1],
+)
+diff= matlab_pca-run_PCAs[0]
+sns.heatmap(
+    diff,
+    mask=np.abs(diff) >0.01,
+    xticklabels=False,
+    yticklabels=False,
+    ax=ax[2],
+)
+ax[0].set_title("Numpy PCA")
+ax[1].set_title("Matlab PCA")
+ax[2].set_title("Difference")
+plt.show()
+
 
 pca_r2 = []
 mean_r2 = []
+all_r2s =[]
 for n_pca in tqdm(range(20)):
     nom_denom = []
     r2s = []
     for run in range(n_runs):
         # fit data using all the other runs
         mask = np.arange(n_runs) != run
+
         # tmpy = np.vstack(compress(data, mask))
         # X = np.vstack((compress(design, mask)))
 
         # pcas = np.vstack((compress(run_PCAs, mask)))
         # X = np.c_[X, pcas[:, :n_pca]]
 
-        # n_regressors = design[run].shape[1] + n_pca
-        # betas = sm.OLS(tmpy, X).fit().params[:n_regressors,:]
 
         pc_regressors = [pc[:, :n_pca] for pc in compress(run_PCAs, mask)]
         betas = fit_separate_runs(
@@ -296,15 +350,23 @@ for n_pca in tqdm(range(20)):
         # project out polynomials
         y = make_project_matrix(polynomials) * data[run]
         y, yhat = np.asarray(y), np.asarray(yhat)
+
         nom, denom = R2_nom_denom(y, yhat)
         nom_denom.append((nom, denom))
         r2s.append(rsquared(y, yhat))
+
     mean_r2.append(np.median(np.vstack(r2s).mean(0)[best_vox]))
     with np.errstate(divide="ignore", invalid="ignore"):
         nom = np.array(nom_denom).sum(0)[0, :]
         denom = np.array(nom_denom).sum(0)[1, :]
         r2s = np.nan_to_num(1 - nom / denom)
+    all_r2s.append(r2s)
     pca_r2.append(np.median(r2s[best_vox]))
+
+all_r2s = np.array(all_r2s) # npc x voxel
+best_mask = np.any(all_r2s > 0, 0) & mean_mask.flatten()
+xval  = np.median(all_r2s[:, best_mask], 1)
+xval = np.median(all_r2s[:, all_r2s.mean(0)>0],1)
 select_pca = select_noise_regressors(np.asarray(pca_r2))
 
 plt.plot(pca_r2)
