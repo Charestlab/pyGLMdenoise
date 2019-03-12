@@ -35,12 +35,14 @@ def crossval(design, data, polynomials, verbose=None):
             stackdesign), list(compress(data, mask))))
 
         # get the predicted responses
+        # here we apply the betas from the training
+        # set to the left out design
         modelfit = np.dot(design[p], betas[p])
 
-        # remove polynomials from the modelfits
+        # remove polynomials from the cross-val modelfits
         whitemodelfit.append(np.dot(polynomials[p], modelfit))
 
-        # calculate run-wise R2
+        # calculate run-wise R2 using the cross-val modelfits
         R2run.append(calccodStack(data[p], whitemodelfit[p]))
 
     # calculate overall R2
@@ -627,7 +629,6 @@ def optimiseHRF(
             stackdesign = olsmatrix(stackdesign)
             currenthrf = np.asarray(stackdesign.dot(
                 datasubset.reshape((-1), order='F')))[0]
-            # currenthrf = OLS(stackdesign, datasubset.Ravel())
 
             # if HRF is all zeros (this can happen when the data are all zeros)
             # get out prematurely
@@ -660,13 +661,14 @@ def optimiseHRF(
         )
         # prepare design matrix
         convdesign = []
+        whitedesign = []
         for p in range(numruns):
             # get design matrix with HRF
             # number of time points
             convdes = make_design(design[p], tr, ntimes[p], hrfknobs)
 
             # project the polynomials out
-            convdes = np.dot(combinedmatrix[p], convdes)
+            whitedesign.append(np.dot(combinedmatrix[p], convdes))
             # time x conditions
 
             convdesign.append(convdes)
@@ -674,6 +676,7 @@ def optimiseHRF(
         f["hrf"] = hrfknobs
         f["hrffitvoxels"] = None
         f["convdesign"] = convdesign
+        f["whitedesign"] = whitedesign
         f["seedhrf"] = hrfknobs
         return f
 
@@ -683,6 +686,7 @@ def optimiseHRF(
     currentbeta = currentbeta * mx
 
     # prepare design matrix
+    whitedesign = []
     convdesign = []
     for p in range(numruns):
         # get design matrix with HRF
@@ -690,7 +694,7 @@ def optimiseHRF(
         convdes = make_design(design[p], tr, ntimes[p], previoushrf)
 
         # project the polynomials out
-        convdes = np.dot(combinedmatrix[p], convdes)
+        whitedesign.append(np.dot(combinedmatrix[p], convdes))
         # time x conditions
 
         convdesign.append(convdes)
@@ -700,5 +704,6 @@ def optimiseHRF(
     f["hrf"] = previoushrf
     f["hrffitvoxels"] = hrffitvoxels
     f["convdesign"] = convdesign
+    f["whitedesign"] = whitedesign
     f["seedhrf"] = hrfknobs
     return f

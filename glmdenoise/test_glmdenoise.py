@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import warnings
+from itertools import compress
 from utils import get_poly_matrix as gpm
 from utils import optimiseHRF as ohrf
 from utils.getcanonicalhrf import getcanonicalhrf
@@ -42,7 +43,9 @@ opt['extraregressors'] = None
 data = []
 whitedata = []
 design = []
+whitedesign = []
 maxpolydeg = []
+pmatrices = []
 polynomials = []
 combinedmatrix = []
 n_runs = 8
@@ -69,10 +72,11 @@ for ii in range(n_runs):
     maxpolydeg.append(int(((n_vols * TR) / 60) // 2)+1)
     pmatrix = gpm.constructpolynomialmatrix(
         n_vols, list(range(maxpolydeg[ii])))
+    pmatrices.append(pmatrix)
     polynomials.append(gpm.projectionmatrix(pmatrix))
 
     # append the whithened data
-    whitedata.append(polynomials[ii] * y)
+    whitedata.append(np.dot(polynomials[ii], y))
 
     # handle extra regressors
     if opt['extraregressors'] is not None:
@@ -104,7 +108,8 @@ for ii in range(n_runs):
         design.append(events)
     else:
         X = ohrf.make_design(events, TR, n_vols, seedhrf)
-        design.append(np.dot(combinedmatrix[ii], X))
+        design.append(X)
+        whitedesign.append(np.dot(combinedmatrix[ii], X))
 
 
 if opt['hrfmodel'] == 'optimise':
@@ -116,17 +121,19 @@ if opt['hrfmodel'] == 'optimise':
     # update hrf and design
     hrf = hrfparams["hrf"]
     design = hrfparams["convdesign"]
+    whitedesign = hrfparams["whitedesign"]
 elif opt['hrfmodel'] == 'assume':
     # case assume. update hrfparams for book keeping
     hrfparams = dict()
     hrfparams["hrf"] = seedhrf
     hrfparams["convdesign"] = design
+    hrfparams["whitedesign"] = whitedesign
 
 # mean data and mask
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])
 mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 
-results = ohrf.crossval(design, whitedata, polynomials)
+results = ohrf.crossval(whitedesign, whitedata, polynomials)
 
 # check with a figure
 fig, ax = plt.subplots(1, 2, figsize=(8, 3))
@@ -202,56 +209,68 @@ for q, run in enumerate(data):
     noise_pool = run[:, noise_pool_mask]
     white_pool = np.dot(polynomials[q], noise_pool)
     white_pool = normalize(white_pool, axis=1)
-    # polynomials = get_poly_matrix(noise_pool.shape[0], [0, 1, 2, 3, 4])
-    # noise_pool = make_project_matrix(polynomials) * noise_pool
-    u, s, vt = svds(np.mat(white_pool) * np.mat(white_pool.T), k=20)
+    u, s, vt = np.linalg.svd(white_pool * white_pool.T)  # * noise_pool.T)
+    u = u[:, :20]
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
-pca_r2 = []
-mean_r2 = []
-for n_pca in tqdm(range(20)):
-    nom_denom = []
+for n_pca in range(20):
     r2s = []
+    modelfits = []
     for run in range(n_runs):
         # fit data using all the other runs
         mask = np.arange(n_runs) != run
-        # tmpy = np.vstack(compress(data, mask))
-        # X = np.vstack((compress(design, mask)))
 
-        # pcas = np.vstack((compress(run_PCAs, mask)))
-        # X = np.c_[X, pcas[:, :n_pca]]
+        trainIndices = np.where(mask)[0]
 
-        # n_regressors = design[run].shape[1] + n_pca
-        # betas = sm.OLS(tmpy, X).fit().params[:n_regressors,:]
+        # whiten the design and data with pc regressors
+        pccombinedmatrix = []
+        whitetraindata = []
+        whitetraindesign = []
+        for ti in trainIndices:
+            pctrain = run_PCAs[ti][:, :n_pca]
+            pmat = pmatrices[ti]
+            pmatcombined = gpm.projectionmatrix(
+                np.c_[pmat, pctrain])
+            pccombinedmatrix.append(pmatcombined)
+            whitetraindata.append(np.dot(pmatcombined, data[ti]))
+            whitetraindesign.append(np.dot(pmatcombined, design[ti]))
 
-        pc_regressors = [pc[:, :n_pca] for pc in compress(run_PCAs, mask)]
-        betas = fit_separate_runs(
-            list(compress(data, mask)),
-            list(compress(design, mask)),
-            pc_regressors,
-        )
+        stackdesign = np.vstack(whitetraindesign)
 
-        # left out data
-        # project out polynomials
-        polynomials = get_poly_matrix(design[run].shape[0], [0, 1, 2, 3, 4])
-        pcas = run_PCAs[run]
-        left_out_X = np.c_[design[run], pcas[:, :n_pca]]
-        left_out_X = make_project_matrix(polynomials) * left_out_X
-        yhat = left_out_X.dot(betas)
+        betas = ohrf.mtimesStack(ohrf.olsmatrix(stackdesign), whitetraindata)
 
-        # project out polynomials
-        y = make_project_matrix(polynomials) * data[run]
-        y, yhat = np.asarray(y), np.asarray(yhat)
-        nom, denom = R2_nom_denom(y, yhat)
-        nom_denom.append((nom, denom))
-        r2s.append(rsquared(y, yhat))
+        # whiten the left out design
+        whitetestdesign = np.dot(gpm.projectionmatrix(
+            np.c_[pmatrices[run], run_PCAs[run][:, :n_pca]]), design[run])
+
+        modelfit = np.dot(whitetestdesign, betas)
+        modelfits.append(modelfit)
+
+    # now we whiten the modelfits
+
+    calccodStack(data[p], modelfitwhitemodelfit[p])
+
+    # project out polynomials
+    y = make_project_matrix(polynomials) * data[run]
+    y, yhat = np.asarray(y), np.asarray(yhat)
+
+    nom, denom = R2_nom_denom(y, yhat)
+    nom_denom.append((nom, denom))
+    r2s.append(rsquared(y, yhat))
+
     mean_r2.append(np.median(np.vstack(r2s).mean(0)[best_vox]))
     with np.errstate(divide="ignore", invalid="ignore"):
         nom = np.array(nom_denom).sum(0)[0, :]
         denom = np.array(nom_denom).sum(0)[1, :]
         r2s = np.nan_to_num(1 - nom / denom)
+    all_r2s.append(r2s)
     pca_r2.append(np.median(r2s[best_vox]))
+
+all_r2s = np.array(all_r2s)  # npc x voxel
+best_mask = np.any(all_r2s > 0, 0) & mean_mask.flatten()
+xval = np.median(all_r2s[:, best_mask], 1)
+xval = np.median(all_r2s[:, all_r2s.mean(0) > 0], 1)
 select_pca = select_noise_regressors(np.asarray(pca_r2))
 
 plt.plot(pca_r2)
