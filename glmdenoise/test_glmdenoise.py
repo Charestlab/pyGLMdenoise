@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+from random import choices
 import warnings
 from itertools import compress
 from utils import get_poly_matrix as gpm
@@ -39,6 +40,7 @@ opt['hrfmodel'] = 'optimise'
 opt['extraregressors'] = None
 opt['pcR2cutoff'] = 0
 opt['pcR2cutoffmask'] = 1
+opt['numboots'] = 100
 
 data = []
 whitedata = []
@@ -249,6 +251,51 @@ select_pca = select_noise_regressors(np.asarray(xval))
 plt.plot(xval)
 plt.plot(select_pca, xval[select_pca], "o")
 plt.show()
+
+# bootstrap runs for vanilla fit
+# using whitedesign, whitedata
+bootbetas = []
+for bootn in range(opt['numboots']):
+    print(f'working on boot {bootn}')
+    bootis = choices(range(n_runs), k=n_runs)
+    bootdes = [whitedesign[x] for x in bootis]
+    bootdat = [whitedata[x] for x in bootis]
+    stackdesign = np.vstack(bootdes)
+    bootbetas.append(np.asarray(ohrf.mtimesStack(
+        ohrf.olsmatrix(stackdesign), bootdat)))
+
+# now do the final fit with the selected number of pcs
+# here we bootstrap as well
+
+n_pca = select_pca
+whitepcdata = []
+whitepcdesign = []
+for run in range(n_runs):
+    # collect all the pcs and the projected data
+    pctrain = run_PCAs[run][:, :n_pca]
+    pmat = pmatrices[run]
+    pmatcombined = gpm.projectionmatrix(
+        np.c_[pmat, pctrain])
+    pccombinedmatrix.append(pmatcombined)
+    whitepcdata.append(pmatcombined @ data[run])
+    whitepcdesign.append(pmatcombined @ design[run])
+
+bootdenoisebetas = []
+for bootn in range(opt['numboots']):
+    print(f'working on boot {bootn}')
+    bootis = choices(range(n_runs), k=n_runs)
+    bootdes = [whitepcdesign[x] for x in bootis]
+    bootdat = [whitepcdata[x] for x in bootis]
+    stackdesign = np.vstack(bootdes)
+    bootdenoisebetas.append(np.asarray(ohrf.mtimesStack(
+        ohrf.olsmatrix(stackdesign), bootdat)).T)
+
+bootdenoisebetas = np.stack(bootdenoisebetas, axis=-1)
+
+nconditions = bootdenoisebetas[0].shape[1]
+finalfits = np.zeros((bootdenoisebetas[0].shape[0], nconditions, 3))
+for p in range(nconditions):
+    finalfits[:, p] = np.percentile(bootdenoisebetas[:, p, :], 50, axis=2)
 
 
 """
