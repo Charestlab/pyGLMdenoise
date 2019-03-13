@@ -8,7 +8,7 @@ from utils import get_poly_matrix as gpm
 from utils import optimiseHRF as ohrf
 from utils.getcanonicalhrf import getcanonicalhrf
 from utils.normalisemax import normalisemax
-from scipy.sparse.linalg import svds
+from scipy.linalg import svd
 from sklearn.preprocessing import normalize
 from select_noise_regressors import select_noise_regressors
 # import scipy.io as sio
@@ -76,7 +76,7 @@ for ii in range(n_runs):
     polynomials.append(gpm.projectionmatrix(pmatrix))
 
     # append the whithened data
-    whitedata.append(np.dot(polynomials[ii], y))
+    whitedata.append(polynomials[ii] @ y)
 
     # handle extra regressors
     if opt['extraregressors'] is not None:
@@ -109,7 +109,7 @@ for ii in range(n_runs):
     else:
         X = ohrf.make_design(events, TR, n_vols, seedhrf)
         design.append(X)
-        whitedesign.append(np.dot(combinedmatrix[ii], X))
+        whitedesign.append(combinedmatrix[ii] @ X)
 
 
 if opt['hrfmodel'] == 'optimise':
@@ -130,10 +130,12 @@ elif opt['hrfmodel'] == 'assume':
     hrfparams["whitedesign"] = whitedesign
 
 # mean data and mask
+# TO DO : check whether here we use data or whitedata
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])
 mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 
-results = ohrf.crossval(whitedesign, whitedata, polynomials)
+results = ohrf.crossval(whitedesign, whitedata,
+                        design, whitedata, polynomials)
 
 # check with a figure
 fig, ax = plt.subplots(1, 2, figsize=(8, 3))
@@ -176,7 +178,7 @@ sns.heatmap(volpool.reshape((80, 80)))
 plt.show()
 
 best_vox = (
-    results['R2'] > opt['pc']
+    results['R2'] > opt['pcR2cutoff']
 )  # (r2s_vanilla > np.percentile(r2s_vanilla,95)) & mask
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
@@ -207,17 +209,17 @@ calculate cross-validated fit
 run_PCAs = []
 for q, run in enumerate(data):
     noise_pool = run[:, noise_pool_mask]
-    white_pool = np.dot(polynomials[q], noise_pool)
-    white_pool = np.mat(normalize(white_pool, axis=1))
-    u, s, vt = np.linalg.svd(white_pool * white_pool.T)  # * noise_pool.T)
+    white_pool = polynomials[q] @ noise_pool
+    white_pool = np.mat(normalize(white_pool, axis=0))
+    u, s, Vh = svd(white_pool @ white_pool.T, lapack_driver='gesvd')
+    # u, s, vt = np.linalg.svd(white_pool * white_pool.T)  # * noise_pool.T)
     u = u[:, :20]
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
 pcR2 = []
-for n_pca in range(20):
-    print('cross-validating model with {} PCs...'.format(n_pca+1))
-    r2s = []
+for n_pca in range(1, 20):
+    print('cross-validating model with {} PCs...'.format(n_pca))
     pccombinedmatrix = []
     whitepcdata = []
     whitepcdesign = []
@@ -228,10 +230,11 @@ for n_pca in range(20):
         pmatcombined = gpm.projectionmatrix(
             np.c_[pmat, pctrain])
         pccombinedmatrix.append(pmatcombined)
-        whitepcdata.append(np.dot(pmatcombined, data[run]))
-        whitepcdesign.append(np.dot(pmatcombined, design[run]))
+        whitepcdata.append(pmatcombined @ data[run])
+        whitepcdesign.append(pmatcombined @ design[run])
 
-    pcresults = ohrf.crossval(whitepcdesign, whitepcdata, pccombinedmatrix)
+    pcresults = ohrf.crossval(
+        whitepcdesign, whitepcdata, design, whitedata, polynomials)
     pcR2.append(pcresults["R2"])
 
 # vertical stack of the PCR2

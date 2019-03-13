@@ -2,7 +2,7 @@ import numpy as np
 from scipy.interpolate import pchip
 
 
-def crossval(design, data, polynomials, verbose=None):
+def crossval(whitedesign, whitedata, design, data, polynomials, verbose=None):
     """ cross-validated R2
 
     Args:
@@ -28,21 +28,26 @@ def crossval(design, data, polynomials, verbose=None):
         mask = np.arange(numruns) != p
 
         # stack the training design matrices
-        stackdesign = np.vstack(list(compress(design, mask)))
+        # here, we use the combinedmatrix @ design
+        stackdesign = np.vstack(list(compress(whitedesign, mask)))
 
-        # get the training betas
+        # get the training betas # note kendrick uses data2
+        # (whitened with combinedmatrix) for betas
         betas.append(mtimesStack(olsmatrix(
-            stackdesign), list(compress(data, mask))))
+            stackdesign), list(compress(whitedata, mask))))
 
         # get the predicted responses
         # here we apply the betas from the training
-        # set to the left out design
-        modelfit = np.dot(design[p], betas[p])
+        # set to the left out design (non-whitened)
+        modelfit = design[p] @ betas[p]
 
         # remove polynomials from the cross-val modelfits
-        whitemodelfit.append(np.dot(polynomials[p], modelfit))
+        # (note: we use polynomials here, not combinexmatrix)
+        whitemodelfit.append(polynomials[p] @ modelfit)
 
         # calculate run-wise R2 using the cross-val modelfits
+        # this data has been whitened by the polynomials, not the
+        # combinedmatrix
         R2run.append(calccodStack(data[p], whitemodelfit[p]))
 
     # calculate overall R2
@@ -204,8 +209,8 @@ def calccod(x, y, wantgain=0, wantmeansub=1):
                   it was dumb.
 
      example:
-     x = np.random.random(1,100)
-     calccod(x,x+0.1*np.random.random(1,100))
+     x = np.random.random(100)
+     calccod(x,x+0.1*np.random.random(100))
 
     """
 
@@ -219,7 +224,7 @@ def calccod(x, y, wantgain=0, wantmeansub=1):
         if wantgain == 2:
             # if the gain was going to be negative, rectify it to 0.
             temp[temp < 0] = 0
-        x = np.dot(x, temp)
+        x = x * temp
 
     # propagate NaNs (i.e. ignore invalid data points)
     x[np.isnan(y)] = np.nan
@@ -359,7 +364,7 @@ def mtimesStack(m1, m2):
     for q in range(nruns):
         nvols = m2[q].shape[0]
         thiscol = cnt + np.asarray(list(range(nvols)))
-        colrow = np.dot(m1[:, thiscol], m2[q])
+        colrow = m1[:, thiscol] @ m2[q]
         f = f + colrow
         cnt = cnt + m2[q].shape[0]
 
@@ -413,12 +418,12 @@ def olsmatrix(X):
         )
         f = np.zeros((X.shape[1], X.shape[0]))
         X = np.mat(X)
-        f[good, :] = np.dot(np.linalg.inv(
-            np.dot(X[:, good].T, X[:, good])), X[:, good].T)
+        f[good, :] = np.linalg.inv(
+            X[:, good].T  @ X[:, good]) @ X[:, good].T
 
     else:
         X = np.mat(X)
-        f = np.dot(np.linalg.inv(np.dot(X.T, X)), X.T)
+        f = np.linalg.inv(X.T @ X) @ X.T
 
     return f
 
@@ -639,7 +644,7 @@ def optimiseHRF(
             # check for convergence
             # how much variance of the previous estimate does
             # the current one explain?
-            hrfR2 = calccod(previoushrf, currenthrf)
+            hrfR2 = calccod(previoushrf, currenthrf, wantmeansub=0)
 
             if (hrfR2 >= minR2 and cnt > 2):
                 break
@@ -650,7 +655,7 @@ def optimiseHRF(
     # we want to see that we're not converging in a weird place
     # so we compute the coefficient of determination between the
     # current estimate and the seed hrf
-    hrfR2 = calccod(hrfknobs, previoushrf)
+    hrfR2 = calccod(hrfknobs, previoushrf, wantmeansub=0)
 
     # sanity check to make sure that we are not doing worse.
     if hrfR2 < hrfthresh:
