@@ -12,13 +12,17 @@ f = normalisemax(m,dim)
  (normalisemax([[1, 2, 3]])==[[1/3, 2/3, 1]]).all()
 """
 import numpy as np
-def normalisemax(m,dim=None):
+from utils.choose import choose as ch
+from utils.isrowvector import isrowvector as isr
+
+
+def normalisemax(m, dim=None):
     # input
     if dim is None:
-        dim = choose(isrowvector(m),1,0)
+        dim = ch(isr(m), 1, 0)
     # do it
-    if dim==0:
+    if dim == 0:
         f = m / np.max(m)
     else:
-        f = m / np.max(m,dim)        
+        f = m / np.max(m, dim)
     return f

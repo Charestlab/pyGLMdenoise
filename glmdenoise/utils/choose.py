@@ -8,10 +8,11 @@ function f = choose(flag,yes,no)
  <no> is something
 
  if <flag>, return <yes>.  otherwise, return <no>.
- 
+
 """
 
-def choose(flag,yes,no):
+
+def choose(flag, yes, no):
 
     if flag:
         f = yes
