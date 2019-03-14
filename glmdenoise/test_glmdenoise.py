@@ -245,6 +245,15 @@ for bootn in range(opt['numboots']):
     bootbetas.append(np.asarray(ohrf.mtimesStack(
         ohrf.olsmatrix(stackdesign), bootdat)))
 
+nvox, nconditions, nboot = bootbetas.shape
+vanillafits = np.zeros((nvox, nconditions))
+vanillase = np.zeros((nvox, nconditions))
+for p in range(nconditions):
+    temp = np.percentile(bootbetas[:, p, :], [16, 50, 84], axis=1).T
+    vanillafits[:, p] = temp[:, 1]
+    vanillase[:, p] = (temp[:, 2] - temp[:, 0])/2
+
+
 # now do the final fit with the selected number of pcs
 # here we bootstrap as well
 
@@ -275,11 +284,14 @@ bootdenoisebetas = np.stack(bootdenoisebetas, axis=-1)
 
 nvox, nconditions, nboot = bootdenoisebetas.shape
 finalfits = np.zeros((nvox, nconditions))
+modelse = np.zeros((nvox, nconditions))
 for p in range(nconditions):
     temp = np.percentile(bootdenoisebetas[:, p, :], [16, 50, 84], axis=1).T
     finalfits[:, p] = temp[:, 1]
+    modelse[:, p] = (temp[:, 2] - temp[:, 0])/2
 
-
+poolse = np.sqrt(np.mean(modelse**2, axis=1))
+pseudots = finalfits / modelse
 """
 dlist =
 for dm in dms:
