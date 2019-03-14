@@ -48,8 +48,7 @@ def make_design(events, tr, n_times, hrf=None):
             # loop over onset times
             for r in otimes:
                 # interpolate to find values at the data sampling time points
-                sampler = all_times
-                f = pchip(r + hrf_times, hrf, extrapolate=False)(sampler)
+                f = pchip(r + hrf_times, hrf, extrapolate=False)(all_times)
                 f[np.isnan(f)] = 0
                 yvals = yvals + f
 
