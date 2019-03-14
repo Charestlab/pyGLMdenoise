@@ -26,8 +26,7 @@ def make_design(events, tr, n_times, hrf=None):
         for i, q in enumerate(conditions):
 
             # onset times for qth condition in run p
-            otimes = np.array(
-                events[events['trial_type'] == q]['onset'].values/tr).astype(int)
+            otimes = events[events['trial_type'] == q]['onset'].values//tr
             yvals = np.zeros((n_times))
             for r in otimes:
                 yvals[r] = 1
@@ -40,7 +39,7 @@ def make_design(events, tr, n_times, hrf=None):
 
         for i, q in enumerate(conditions):
             # onset times for qth condition in run p
-            otimes = events.loc[events['trial_type'] == q, 'onset'].values
+            otimes = events[events['trial_type'] == q]['onset'].values
 
             # intialize
             yvals = np.zeros((n_times))
@@ -49,8 +48,7 @@ def make_design(events, tr, n_times, hrf=None):
             for r in otimes:
                 # interpolate to find values at the data sampling time points
                 f = pchip(r + hrf_times, hrf, extrapolate=False)(all_times)
-                f[np.isnan(f)] = 0
-                yvals = yvals + f
+                yvals = yvals + np.nan_to_num(f)
 
             # record
             dm[:, i] = yvals

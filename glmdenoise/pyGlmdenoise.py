@@ -65,7 +65,7 @@ def fit_runs(runs, DM, extra_regressors=False, poly_degs=np.arange(5)):
         start_col += run.shape[0]
     return betas
 
-def cross_validate(data, design, extra_regressors=False):
+def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     """[summary]
     
     Arguments:
@@ -113,6 +113,9 @@ def cross_validate(data, design, extra_regressors=False):
         r2s = np.nan_to_num(1 - (nom / denom)) * 100
     return r2s
 
+"""
+Load data
+"""
 data = []
 design = []
 n_runs = 6
@@ -148,28 +151,25 @@ for ii in range(n_runs):
     data.append(y)
     design.append(X)
 
-# kendricks formula for the number of degrees to use
 max_poly_deg = int(((data[0].shape[0] * TR) / 60) // 2) + 1
 poly_degs = np.arange(max_poly_deg)
 
-# mean data and mask
+"""
+mean data and mask
+"""
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])
 mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 
 """
 Get initial fit to select noise pool
 """
-
 r2s_vanilla = cross_validate(data, design)
 
-
-
 """
-plots noise pool
+get noise pool
 """
 mask_flat = mean_mask.reshape(-1)
 noise_pool_mask = (r2s_vanilla < 0) & mask_flat
-
 
 """
 Get PCAs
@@ -189,13 +189,18 @@ for run in data:
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
+"""
+Get R2 per PCn
+"""
 all_r2s = []
 for n_pca in tqdm(range(21), desc='Number of PCs'):
     pc_regressors = [pc[:, :n_pca] for pc in run_PCAs]
     all_r2s.append(cross_validate(data, design, pc_regressors))
 all_r2s = np.array(all_r2s)
 
-# Plot R2 per PCn 
+"""
+Plot R2 per PCn 
+"""
 best_mask = np.any(all_r2s > 0, 0) & mask_flat
 xval  = np.nanmedian(all_r2s[:, best_mask], 1)
 select_pca = select_noise_regressors(np.asarray(xval))
