@@ -15,25 +15,6 @@ from select_noise_regressors import select_noise_regressors
 # import scipy.io as sio
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
-
-def get_constants(run_lens):
-    """ Calculates a sparse array with 1s describing a run on its corresponding
-        column
-
-    Args:
-        run_lens (int): data
-
-    Returns:
-        array of size sum(run_lens) x len(run_lens)
-    """
-    tot_len = np.sum(run_lens)
-    const = np.zeros((tot_len, len(run_lens)))
-
-    for i, rlen in enumerate(run_lens):
-        const[i * rlen: (i + 1) * rlen, i] = 1
-    return const
-
-
 # options
 opt = {}
 opt['hrfmodel'] = 'optimise'
@@ -292,10 +273,11 @@ for bootn in range(opt['numboots']):
 
 bootdenoisebetas = np.stack(bootdenoisebetas, axis=-1)
 
-nconditions = bootdenoisebetas[0].shape[1]
-finalfits = np.zeros((bootdenoisebetas[0].shape[0], nconditions, 3))
+nvox, nconditions, nboot = bootdenoisebetas.shape
+finalfits = np.zeros((nvox, nconditions))
 for p in range(nconditions):
-    finalfits[:, p] = np.percentile(bootdenoisebetas[:, p, :], 50, axis=2)
+    temp = np.percentile(bootdenoisebetas[:, p, :], [16, 50, 84], axis=1).T
+    finalfits[:, p] = temp[:, 1]
 
 
 """
