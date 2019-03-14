@@ -60,14 +60,12 @@ start = time.time()
 GD.run()
 print(f'Fit took {time.time()-start} seconds!')
 
+# plot pseudo T statistics
 brain = np.zeros(len(GD.mean_mask))
 brain[GD.mean_mask] = GD.pseudo_t_stats.mean(0)
 brain = brain.reshape(*dims[:-1], order='F')
-
 
 from glmdenoise.utils.make_image_stack import make_image_stack
 stack = make_image_stack(brain)
 
 plt.imshow(stack)
-
-
