@@ -196,12 +196,12 @@ for q, run in enumerate(data):
     white_pool = np.mat(normalize(white_pool, axis=0))
     u, s, Vh = svd(white_pool @ white_pool.T, lapack_driver='gesvd')
     # u, s, vt = np.linalg.svd(white_pool * white_pool.T)  # * noise_pool.T)
-    u = u[:, :20]
+    u = u[:, :21]
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
 pcR2 = []
-for n_pca in range(1, 20):
+for n_pca in range(21):
     print('cross-validating model with {} PCs...'.format(n_pca))
     pccombinedmatrix = []
     whitepcdata = []
