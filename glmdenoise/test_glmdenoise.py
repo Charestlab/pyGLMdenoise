@@ -12,6 +12,9 @@ from utils.normalisemax import normalisemax
 from scipy.linalg import svd
 from sklearn.preprocessing import normalize
 from select_noise_regressors import select_noise_regressors
+import time
+start = time.time()
+
 # import scipy.io as sio
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -120,6 +123,8 @@ mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 results = ohrf.crossval(whitedesign, whitedata,
                         design, whitedata, polynomials)
 
+
+"""
 # check with a figure
 fig, ax = plt.subplots(1, 2, figsize=(8, 3))
 sns.distplot(results['R2'], color="green", ax=ax[0])
@@ -137,7 +142,7 @@ sns.heatmap(
 )
 plt.show()
 
-"""
+
 plots noise pool
 
 sns.heatmap(noise_pool_mask.reshape(
@@ -154,6 +159,7 @@ noise_pool_mask = (results['R2'] < opt['pcR2cutoff']) & (
     > np.percentile(mean_image[mean_mask].flatten(), 99) / 2
 )
 
+"""
 # show the noisepool
 volpool = np.zeros((6400))
 volpool[noise_pool_mask] = 1
@@ -182,6 +188,7 @@ sns.heatmap(
 ax[0].set_title("Noise pool")
 ax[1].set_title("best voxels")
 plt.show()
+"""
 
 """
 Loop over number of PCAs
@@ -229,10 +236,11 @@ pcvoxels = np.any(pcR2stack > opt['pcR2cutoff'], axis=0)
 xval = np.nanmedian(pcR2stack[:, pcvoxels], 1)
 select_pca = select_noise_regressors(np.asarray(xval))
 
+"""
 plt.plot(xval)
 plt.plot(select_pca, xval[select_pca], "o")
 plt.show()
-
+"""
 # bootstrap runs for vanilla fit
 # using whitedesign, whitedata
 bootbetas = []
@@ -244,6 +252,7 @@ for bootn in range(opt['numboots']):
     stackdesign = np.vstack(bootdes)
     bootbetas.append(np.asarray(ohrf.mtimesStack(
         ohrf.olsmatrix(stackdesign), bootdat)))
+bootbetas = np.stack(bootbetas, axis=-1)
 
 nvox, nconditions, nboot = bootbetas.shape
 vanillafits = np.zeros((nvox, nconditions))
@@ -292,6 +301,10 @@ for p in range(nconditions):
 
 poolse = np.sqrt(np.mean(modelse**2, axis=1))
 pseudots = finalfits / modelse
+
+# run function
+print(f'it took {time.time()-start} seconds')
+
 """
 dlist =
 for dm in dms:
