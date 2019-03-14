@@ -1,102 +1,14 @@
 import numpy as np
-from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from nistats.design_matrix import make_design_matrix
-from nistats.reporting import plot_design_matrix
+from make_design_matrix import make_design
 from itertools import compress
-import statsmodels.api as sm
+from scipy.io import loadmat
 from tqdm import tqdm
 import warnings
 from utils.get_poly_matrix import *
-import numpy
-from scipy.sparse.linalg import svd
-
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-def rsquared(y, yhat):
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        denom = np.sum((y - y.mean(axis=0)) ** 2, axis=0)  # correct denominator
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-        rsq = np.nan_to_num(1 - nom / denom)
-
-    # remove inf-values because we might have voxels outside the brain
-    rsq[rsq < -1] = -1
-    return rsq
-
-def fit_separate_runs(runs, DM, extra_regressors = False):
-    #run_lens = [r.shape[0] for r in runs]
-    #constants = get_constants(run_lens)
-    if extra_regressors and extra_regressors[0].any():
-
-        for i, (y, X) in enumerate(zip(runs, DM)):
-            polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            X = np.c_[X, extra_regressors[i]]
-            runs[i] = make_project_matrix(polynomials) * y
-            DM[i] = make_project_matrix(polynomials) * X
-        # n_regs = extra_regressors[0].shape[1]
-        # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
-        X = np.vstack(DM)
-        y = np.vstack(runs)
-        # X = np.c_[X, constants]
-
-        # regs = np.vstack(extra_regressors)
-        # X = np.c_[X, regs]
-
-        betas = sm.OLS(y, X).fit().params
-
-        # for run, X, reg in zip(runs,DM, extra_regressors):
-        #     X = np.c_[X, reg]
-        #     polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-        #     run = make_project_matrix(polynomials) * run
-        #     X = make_project_matrix(polynomials) * X
-        #     betas += sm.OLS(run, X).fit().params
-    else:
-        for i, (y, X) in enumerate(zip(runs, DM)):
-            polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-            runs[i] = make_project_matrix(polynomials) * y
-            DM[i] = make_project_matrix(polynomials) * X
-        betas = np.zeros((DM[0].shape[1], runs[0].shape[1]))
-
-        # n_regs = extra_regressors[0].shape[1]
-        # betas = np.zeros((DM[0].shape[1]+n_regs, runs[0].shape[1]))
-        X = np.vstack(DM)
-        # X = np.c_[X, constants]
-        y = np.vstack(runs)
-
-        betas = sm.OLS(y, X).fit().params
-
-        # for run, X in zip(runs,DM):
-        #     polynomials = get_poly_matrix(X.shape[0], [0, 1, 2, 3, 4])
-        #     run = np.mat(make_project_matrix(polynomials) * run)
-        #     X = np.mat(make_project_matrix(polynomials) * X)
-        #     betas += sm.OLS(run, X).fit().params
-    return betas
-
-
-def get_constants(run_lens):
-    """ Calculates a sparse array with 1s describing a run on its corresponding
-        column
-
-    Args:
-        run_lens (int): data
-
-    Returns:
-        array of size sum(run_lens) x len(run_lens)
-    """
-    tot_len = np.sum(run_lens)
-    const = np.zeros((tot_len, len(run_lens)))
-
-    for i, rlen in enumerate(run_lens):
-        const[i * rlen : (i + 1) * rlen, i] = 1
-    return const
-
 
 def R2_nom_denom(y, yhat):
     """ Calculates the nominator and denomitor for calculating R-squared
@@ -108,18 +20,107 @@ def R2_nom_denom(y, yhat):
     Returns:
         nominator (float or array), denominator (float or array)
     """
+    y, yhat = np.array(y), np.array(yhat)
     with np.errstate(divide="ignore", invalid="ignore"):
         nom = np.sum((y - yhat) ** 2, axis=0)
         denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
     return nom, denom
 
 
+def fit_runs(runs, DM, extra_regressors=False, poly_degs=np.arange(5)):
+    """Fits a least square of combined runs by first whitening the data and design. 
+       The matrix addition is equivalent to concatenating the list of data and the list of
+       design and fit it all at once. However, this is more memory efficient. 
+    Arguments:
+        runs {list} -- List of runs. Each run is an TR x voxel sized array
+        DM {list} -- List of design matrices. Each design matrix 
+                     is an TR x predictor sizec array
+    
+    Keyword Arguments:
+        extra_regressors {list} -- list of same length as runs and DM (default: {False})
+        poly_degs {array} -- array of polynomial degrees to project 
+                             from data and design (default: {np.arange(5)})
+    
+    Returns:
+        [array] -- betas from fit
+    """
+
+    # whiten data
+    for i, (y, X) in enumerate(zip(runs, DM)):
+        polynomials = get_poly_matrix(X.shape[0], poly_degs)
+        if extra_regressors and extra_regressors[0].any():
+            polynomials = np.c_[polynomials, extra_regressors[i]]
+        DM[i] = make_project_matrix(polynomials) @ X
+        runs[i] = make_project_matrix(polynomials) @ y
+    
+    X = np.vstack(DM)
+    X = np.linalg.inv(X.T @ X) @ X.T
+
+    betas = 0
+    start_col = 0
+    for run in (runs):
+        n_vols = run.shape[0]
+        these_cols = np.arange(n_vols) + start_col
+        betas += X[:, these_cols] @ run
+        start_col += run.shape[0]
+    return betas
+
+def cross_validate(data, design, extra_regressors=False):
+    """[summary]
+    
+    Arguments:
+        data {list} -- [description]
+        design {list} -- [description]
+    
+    Keyword Arguments:
+        extra_regressors {bool/list} -- [description] (default: {False})
+    
+    Returns:
+        [array] -- [description]
+    """
+
+    nom_denom = []
+    for run in tqdm(range(n_runs), desc='Cross-validating run'):
+        # fit data using all the other runs
+        mask = np.arange(n_runs) != run
+        if extra_regressors and extra_regressors[0].any():
+            betas = fit_runs(
+                list(compress(data, mask)),
+                list(compress(design, mask)),
+                list(compress(extra_regressors, mask)))
+        else:
+            betas = fit_runs(
+                list(compress(data, mask)),
+                list(compress(design, mask)))
+
+        # predict left-out run with vanilla design matrix
+        yhat = design[run] @ betas
+
+        y = data[run]
+        # get polynomials
+        polynomials = get_poly_matrix(y.shape[0], poly_degs)
+        # project out polynomials from data and prediction
+        y = make_project_matrix(polynomials) @ y 
+        yhat = make_project_matrix(polynomials) @ yhat
+
+        nom, denom = R2_nom_denom(y, yhat)
+        nom_denom.append((nom, denom))
+    
+    # calculate R2
+    nom = np.array(nom_denom).sum(0)[0, :]
+    denom = np.array(nom_denom).sum(0)[1, :]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r2s = np.nan_to_num(1 - (nom / denom)) * 100
+    return r2s
+
 data = []
 design = []
 n_runs = 6
+hrf = np.load('hrf.npy')    
 for ii in range(n_runs):
     y = np.load(f"data/sub_sub-01_slice_15_run_{ii+1:02d}.npy")
-    y = np.moveaxis(y, 2,0)
+    #y = np.moveaxis(y, 2,0)
+    y = np.swapaxes(y, 0, 2)
     dims = y.shape
     y = y.reshape([y.shape[0], -1])
 
@@ -143,15 +144,14 @@ for ii in range(n_runs):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    X = make_design_matrix(
-        frame_times, events, hrf_model="glover", drift_model=None
-    )
-
+    X = make_design(events, TR, n_scans, hrf)
     data.append(y)
-    design.append(X.values[:, :-1])
+    design.append(X)
 
 # kendricks formula for the number of degrees to use
-maxpolydeg = int(((data[0].shape[0] * TR) / 60) // 2)
+max_poly_deg = int(((data[0].shape[0] * TR) / 60) // 2) + 1
+poly_degs = np.arange(max_poly_deg)
+
 # mean data and mask
 mean_image = np.vstack(data).mean(0).reshape(*dims[1:])
 mean_mask = mean_image > np.percentile(mean_image, 99) / 2
@@ -159,54 +159,21 @@ mean_mask = mean_image > np.percentile(mean_image, 99) / 2
 """
 Get initial fit to select noise pool
 """
-preds = []
-nom_denom = []
-r2s = []
-for run in range(n_runs):
-    # fit data using all the other runs
-    mask = np.arange(n_runs) != run
-    betas = fit_separate_runs(
-        list(compress(data, mask)), list(compress(design, mask))
-    )
 
-    # left out data
-    # project out polynomials
-    polynomials = get_poly_matrix(design[run].shape[0], [0, 1, 2, 3, 4])
-    this_design = make_project_matrix(polynomials) * design[run]
-    yhat = np.mat(this_design.dot(betas))
-
-    y = np.mat(data[run])
-    # project out polynomials
-    y = make_project_matrix(polynomials) * y
-
-    nom, denom = R2_nom_denom(np.array(y), np.array(yhat))
-    r2s.append(rsquared(np.array(y), np.array(yhat)))
-    preds.append(np.array(yhat))
-    nom_denom.append((nom, denom))
-
-"""
-Calculate R2s
-"""
-with np.errstate(divide="ignore", invalid="ignore"):
-    nom = np.array(nom_denom).sum(0)[0, :]
-    denom = np.array(nom_denom).sum(0)[1, :]
-    r2s_vanilla = np.nan_to_num(1 - nom / denom)*100
+r2s_vanilla = cross_validate(data, design)
 
 """
 Plot R-squares
 """
-# r2s_vanilla = np.vstack(r2s).mean(0)
 fig, ax = plt.subplots(2, 2, figsize=(8, 6))
 ax = ax.flatten()
 
-sns.distplot(r2s_vanilla, color="green", ax=ax[0])
-
+sns.distplot(r2s_vanilla, color="green", ax=ax[0]) 
+ax[0].set_xlim([-10, 20])
 ax[0].set_title('Python R2 distribution')
 
-# plt_img[plt_img < 0.2] = 0
 sns.heatmap(
-    r2s_vanilla.reshape((80, 80), order='F'),
-    #mask=~mean_mask,
+    r2s_vanilla.reshape((80, 80)),
     ax=ax[1],
     xticklabels=False,
     yticklabels=False,
@@ -218,11 +185,10 @@ matlab_r2 = loadmat('../r2.mat')['pcR2']
 
 sns.distplot(np.nan_to_num(matlab_r2.flatten()), color="green", ax=ax[2])
 ax[2].set_title('Matlab R2 distribution')
+ax[2].set_xlim([-10, 20])
 
-# plt_img[plt_img < 0.2] = 0
 sns.heatmap(
     np.nan_to_num(matlab_r2),
-    #mask=~mean_mask,
     ax=ax[3],
     xticklabels=False,
     yticklabels=False,
@@ -234,30 +200,21 @@ plt.show()
 
 """
 plots noise pool
-
-sns.heatmap(noise_pool_mask.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
-sns.heatmap(best_vox.reshape(*dims[1:]).astype(int),xticklabels=False, yticklabels=False)
 """
-mask_flat = mean_mask.reshape(-1, order='F')
-# noise_pool_mask = (r2s_vanilla < 0) & mask
+mask_flat = mean_mask.reshape(-1)
 noise_pool_mask = (r2s_vanilla < 0) & mask_flat
-best_vox = (
-    r2s_vanilla > 0
-)  # (r2s_vanilla > np.percentile(r2s_vanilla,95)) & mask
 
 matlab_noise = loadmat('../noise.mat')['noisepool'].astype(bool)
 
 fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:], order='F'),
-    mask=~noise_pool_mask.reshape(*dims[1:]),
+    noise_pool_mask.reshape(*dims[1:]).astype(int),
     xticklabels=False,
     yticklabels=False,
     ax=ax[0],
 )
 sns.heatmap(
-    r2s_vanilla.reshape(*dims[1:], order='F'),
-    mask=~matlab_noise,
+    matlab_noise.astype(int),
     xticklabels=False,
     yticklabels=False,
     ax=ax[1],
@@ -270,24 +227,30 @@ plt.show()
 Loop over number of PCAs
 calculate cross-validated fit
 """
-matlab_pca = loadmat('../first_pca.mat')['a']
 
 # split PCAs
+# Daniel PCA
+mat_regs = loadmat('../pc_regressors.mat')['pcregressors'][0]
+run_PCAs = mat_regs
 run_PCAs = []
 for run in data:
-    noise_pool = run[:, matlab_noise.flatten(order='F')]
+    noise_pool = run[:, noise_pool_mask]
 
-    polynomials = get_poly_matrix(noise_pool.shape[0], [0, 1, 2, 3, 4])
+    polynomials = get_poly_matrix(noise_pool.shape[0], poly_degs)
     noise_pool = make_project_matrix(polynomials) * np.mat(noise_pool)
 
-    noise_pool = np.mat(normalize(noise_pool,axis=0))
+    noise_pool = normalize(noise_pool, axis=0)
 
-    u, s, Vh = svd(noise_pool * noise_pool.T)#, lapack_driver='gesvd')
-    u, s, vt = np.linalg.svd(noise_pool* noise_pool.T)# * noise_pool.T)
-    u =  u[:,:20]
+    noise_pool = noise_pool @ noise_pool.T
+    u, s, vt = np.linalg.svd(noise_pool)
+    u =  u[:, :21]
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
+"""
+plot difference to matlabs first PCA 
+"""
+matlab_pca = loadmat('../first_pca.mat')['a']
 fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 sns.heatmap(
     run_PCAs[0],
@@ -301,81 +264,76 @@ sns.heatmap(
     yticklabels=False,
     ax=ax[1],
 )
-diff= matlab_pca-run_PCAs[0]
+diff= run_PCAs[0]-matlab_pca
 sns.heatmap(
     diff,
-    mask=np.abs(diff) >0.01,
     xticklabels=False,
     yticklabels=False,
     ax=ax[2],
 )
-ax[0].set_title("Numpy PCA")
-ax[1].set_title("Matlab PCA")
+ax[0].set_title("Matlab PCA")
+ax[1].set_title("Daniel PCA")
 ax[2].set_title("Difference")
 plt.show()
-
-
-pca_r2 = []
-mean_r2 = []
+all_r2s = []
+for n_pca in tqdm(range(21), desc='Number of PCs'):
+    pc_regressors = [pc[:, :n_pca] for pc in run_PCAs]
+    all_r2s.append(cross_validate(data, design, pc_regressors))
+all_r2s = np.array(all_r2s)
 all_r2s =[]
-for n_pca in tqdm(range(20)):
+for n_pca in tqdm(range(21)):
     nom_denom = []
     r2s = []
     for run in range(n_runs):
         # fit data using all the other runs
         mask = np.arange(n_runs) != run
 
-        # tmpy = np.vstack(compress(data, mask))
-        # X = np.vstack((compress(design, mask)))
-
-        # pcas = np.vstack((compress(run_PCAs, mask)))
-        # X = np.c_[X, pcas[:, :n_pca]]
-
-
         pc_regressors = [pc[:, :n_pca] for pc in compress(run_PCAs, mask)]
-        betas = fit_separate_runs(
+        betas = fit_runs(
             list(compress(data, mask)),
             list(compress(design, mask)),
             pc_regressors,
         )
 
         # left out data
-        # project out polynomials
-        polynomials = get_poly_matrix(design[run].shape[0], [0, 1, 2, 3, 4])
-        pcas = run_PCAs[run]
-        left_out_X = np.c_[design[run], pcas[:, :n_pca]]
-        left_out_X = make_project_matrix(polynomials) * left_out_X
-        yhat = left_out_X.dot(betas)
+        this_data = data[run]
+        this_design = design[run]
 
-        # project out polynomials
-        y = make_project_matrix(polynomials) * data[run]
-        y, yhat = np.asarray(y), np.asarray(yhat)
+        # predict
+        yhat = this_design @ betas
 
+        # get polynomials
+        polynomials = get_poly_matrix(this_design.shape[0], poly_degs)
+        # project out polynomials
+        y = make_project_matrix(polynomials) @ this_data
+        yhat = make_project_matrix(polynomials) @ yhat
+
+        # calculate nominator and denominator for R2
         nom, denom = R2_nom_denom(y, yhat)
         nom_denom.append((nom, denom))
-        r2s.append(rsquared(y, yhat))
 
-    mean_r2.append(np.median(np.vstack(r2s).mean(0)[best_vox]))
     with np.errstate(divide="ignore", invalid="ignore"):
         nom = np.array(nom_denom).sum(0)[0, :]
         denom = np.array(nom_denom).sum(0)[1, :]
-        r2s = np.nan_to_num(1 - nom / denom)
+        r2s = np.nan_to_num(1 - (nom / denom)) * 100
     all_r2s.append(r2s)
-    pca_r2.append(np.median(r2s[best_vox]))
+
 
 all_r2s = np.array(all_r2s) # npc x voxel
-best_mask = np.any(all_r2s > 0, 0) & mean_mask.flatten()
-xval  = np.median(all_r2s[:, best_mask], 1)
-xval = np.median(all_r2s[:, all_r2s.mean(0)>0],1)
-select_pca = select_noise_regressors(np.asarray(pca_r2))
+best_mask = np.any(all_r2s > 0, 0) & mask_flat
+xval  = np.nanmedian(all_r2s[:, best_mask], 1)
+select_pca = select_noise_regressors(np.asarray(xval))
 
-plt.plot(pca_r2)
-plt.plot(select_pca, pca_r2[select_pca], "o")
+plt.plot(xval)
+plt.plot(select_pca, xval[select_pca], "o")
 plt.show()
 
 
-"""
-dlist =
-for dm in dms:
+mat_r2 = loadmat('../pca_r2.mat')['pca_r2']
+best_mask = np.any(mat_r2 > 0, 0)
+xval  = np.nanmedian(mat_r2[:, best_mask], 1)
+select_pca = select_noise_regressors(np.asarray(xval))
 
-"""
+plt.plot(xval)
+plt.plot(select_pca, xval[select_pca], "o")
+plt.show()
