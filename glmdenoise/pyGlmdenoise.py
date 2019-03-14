@@ -162,41 +162,7 @@ Get initial fit to select noise pool
 
 r2s_vanilla = cross_validate(data, design)
 
-"""
-Plot R-squares
-"""
-fig, ax = plt.subplots(2, 2, figsize=(8, 6))
-ax = ax.flatten()
 
-sns.distplot(r2s_vanilla, color="green", ax=ax[0]) 
-ax[0].set_xlim([-10, 20])
-ax[0].set_title('Python R2 distribution')
-
-sns.heatmap(
-    r2s_vanilla.reshape((80, 80)),
-    ax=ax[1],
-    xticklabels=False,
-    yticklabels=False,
-    square=True,
-)
-
-ax[1].set_title('Python R2 brain')
-matlab_r2 = loadmat('../r2.mat')['pcR2']
-
-sns.distplot(np.nan_to_num(matlab_r2.flatten()), color="green", ax=ax[2])
-ax[2].set_title('Matlab R2 distribution')
-ax[2].set_xlim([-10, 20])
-
-sns.heatmap(
-    np.nan_to_num(matlab_r2),
-    ax=ax[3],
-    xticklabels=False,
-    yticklabels=False,
-    square=True,
-)
-ax[3].set_title('Matlab R2 brain')
-plt.tight_layout()
-plt.show()
 
 """
 plots noise pool
@@ -204,34 +170,10 @@ plots noise pool
 mask_flat = mean_mask.reshape(-1)
 noise_pool_mask = (r2s_vanilla < 0) & mask_flat
 
-matlab_noise = loadmat('../noise.mat')['noisepool'].astype(bool)
-
-fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-sns.heatmap(
-    noise_pool_mask.reshape(*dims[1:]).astype(int),
-    xticklabels=False,
-    yticklabels=False,
-    ax=ax[0],
-)
-sns.heatmap(
-    matlab_noise.astype(int),
-    xticklabels=False,
-    yticklabels=False,
-    ax=ax[1],
-)
-ax[0].set_title("Numpy noise pool")
-ax[1].set_title("Matlab noise pool")
-plt.show()
 
 """
-Loop over number of PCAs
-calculate cross-validated fit
+Get PCAs
 """
-
-# split PCAs
-# Daniel PCA
-mat_regs = loadmat('../pc_regressors.mat')['pcregressors'][0]
-run_PCAs = mat_regs
 run_PCAs = []
 for run in data:
     noise_pool = run[:, noise_pool_mask]
@@ -247,91 +189,15 @@ for run in data:
     u = u / np.std(u, 0)
     run_PCAs.append(u)
 
-"""
-plot difference to matlabs first PCA 
-"""
-matlab_pca = loadmat('../first_pca.mat')['a']
-fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-sns.heatmap(
-    run_PCAs[0],
-    xticklabels=False,
-    yticklabels=False,
-    ax=ax[0],
-)
-sns.heatmap(
-    matlab_pca,
-    xticklabels=False,
-    yticklabels=False,
-    ax=ax[1],
-)
-diff= run_PCAs[0]-matlab_pca
-sns.heatmap(
-    diff,
-    xticklabels=False,
-    yticklabels=False,
-    ax=ax[2],
-)
-ax[0].set_title("Matlab PCA")
-ax[1].set_title("Daniel PCA")
-ax[2].set_title("Difference")
-plt.show()
 all_r2s = []
 for n_pca in tqdm(range(21), desc='Number of PCs'):
     pc_regressors = [pc[:, :n_pca] for pc in run_PCAs]
     all_r2s.append(cross_validate(data, design, pc_regressors))
 all_r2s = np.array(all_r2s)
-all_r2s =[]
-for n_pca in tqdm(range(21)):
-    nom_denom = []
-    r2s = []
-    for run in range(n_runs):
-        # fit data using all the other runs
-        mask = np.arange(n_runs) != run
 
-        pc_regressors = [pc[:, :n_pca] for pc in compress(run_PCAs, mask)]
-        betas = fit_runs(
-            list(compress(data, mask)),
-            list(compress(design, mask)),
-            pc_regressors,
-        )
-
-        # left out data
-        this_data = data[run]
-        this_design = design[run]
-
-        # predict
-        yhat = this_design @ betas
-
-        # get polynomials
-        polynomials = get_poly_matrix(this_design.shape[0], poly_degs)
-        # project out polynomials
-        y = make_project_matrix(polynomials) @ this_data
-        yhat = make_project_matrix(polynomials) @ yhat
-
-        # calculate nominator and denominator for R2
-        nom, denom = R2_nom_denom(y, yhat)
-        nom_denom.append((nom, denom))
-
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.array(nom_denom).sum(0)[0, :]
-        denom = np.array(nom_denom).sum(0)[1, :]
-        r2s = np.nan_to_num(1 - (nom / denom)) * 100
-    all_r2s.append(r2s)
-
-
-all_r2s = np.array(all_r2s) # npc x voxel
+# Plot R2 per PCn 
 best_mask = np.any(all_r2s > 0, 0) & mask_flat
 xval  = np.nanmedian(all_r2s[:, best_mask], 1)
-select_pca = select_noise_regressors(np.asarray(xval))
-
-plt.plot(xval)
-plt.plot(select_pca, xval[select_pca], "o")
-plt.show()
-
-
-mat_r2 = loadmat('../pca_r2.mat')['pca_r2']
-best_mask = np.any(mat_r2 > 0, 0)
-xval  = np.nanmedian(mat_r2[:, best_mask], 1)
 select_pca = select_noise_regressors(np.asarray(xval))
 
 plt.plot(xval)
