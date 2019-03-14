@@ -179,7 +179,7 @@ class GLMdenoise():
             noise_pool = normalize(noise_pool, axis=0)
 
             noise_pool = noise_pool @ noise_pool.T
-            u, s, vt = np.linalg.svd(noise_pool)
+            u = np.linalg.svd(noise_pool)[0]
             u =  u[:, :21]
             u = u / np.std(u, 0)
             run_PCAs.append(u)
