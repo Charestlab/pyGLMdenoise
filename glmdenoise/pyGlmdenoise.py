@@ -238,7 +238,7 @@ class GLMdenoise():
             percentiles = np.percentile(boot_betas[:, cond, :], [16, 84], axis=0)
             self.standard_error[cond, :] = (percentiles[1, :] - percentiles[0, :])/2
 
-        #poolse = np.sqrt(np.mean(standard_error**2, axis=0))
+        self.poolse = np.sqrt(np.mean(standard_error**2, axis=0))
         with np.errstate(divide="ignore", invalid="ignore"):
             self.pseudo_t_stats = self.final_fit / self.standard_error
         print('Done')
