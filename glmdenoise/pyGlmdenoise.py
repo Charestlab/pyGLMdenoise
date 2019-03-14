@@ -42,7 +42,6 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
         [type] -- [description]
     """
 
-
     # whiten data
     whitened_data = []
     whitened_design = []
@@ -100,6 +99,7 @@ class GLMdenoise():
         self.n_jobs = n_jobs
         self.n_boots = n_boots
         self.n_runs = len(data)
+        self.xval = []
         # calculate polynomial degrees
         max_poly_deg = int(((data[0].shape[0] * tr) / 60) // 2) + 1
         self.poly_degs = np.arange(max_poly_deg)
@@ -200,8 +200,8 @@ class GLMdenoise():
         # calculate best number of PCs
         all_r2s = np.asarray(all_r2s)
         best_mask = np.any(all_r2s > 0, 0)
-        xval  = np.nanmedian(all_r2s[:, best_mask], 1)
-        select_pca = select_noise_regressors(np.asarray(xval))
+        self.xval  = np.nanmedian(all_r2s[:, best_mask], 1)
+        select_pca = select_noise_regressors(np.asarray(self.xval))
         print(f'Selected {select_pca} number of PCs')
 
         # plt.plot(xval)
@@ -229,17 +229,19 @@ class GLMdenoise():
         print('Done!')
 
 
+        print('Calculating standard error and final fit')
         boot_betas = np.array(boot_betas)
-        final_fit = np.median(boot_betas, 0)
+        self.final_fit = np.median(boot_betas, 0)
         n_conds = boot_betas.shape[1]
-        standard_error = np.zeros((final_fit.shape))
+        self.standard_error = np.zeros((self.final_fit.shape))
         for cond in range(n_conds):
             percentiles = np.percentile(boot_betas[:, cond, :], [16, 84], axis=0)
-            standard_error[cond, :] = (percentiles[1, :] - percentiles[0, :])/2
+            self.standard_error[cond, :] = (percentiles[1, :] - percentiles[0, :])/2
 
         #poolse = np.sqrt(np.mean(standard_error**2, axis=0))
         with np.errstate(divide="ignore", invalid="ignore"):
-            self.pseudo_t_stats = final_fit / standard_error
+            self.pseudo_t_stats = self.final_fit / self.standard_error
+        print('Done')
 
         # sns.heatmap(pseudo_t_stats.mean(0).reshape((80,80)), xticklabels=False, yticklabels=False)
         # plt.show()
