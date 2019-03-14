@@ -106,11 +106,11 @@ class GLMdenoise():
 
 
         
-        self.mean_image = np.vstack(data).mean(0).reshape(*self.dims[1:])
+        self.mean_image = np.vstack(data).mean(0)
         self.mean_mask = self.mean_image > np.percentile(self.mean_image, 99) / 2
-        self.flat_mean_mask = self.mean_mask.flatten()
+        #self.flat_mean_mask = self.mean_mask.flatten()
         # reduce data
-        self.data = [d[:, self.flat_mean_mask].astype(np.float16) for d in self.data]
+        self.data = [d[:, self.mean_mask].astype(np.float16) for d in self.data]
 
     def cross_validate(self, extra_regressors=False):
         """[summary]

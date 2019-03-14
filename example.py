@@ -31,8 +31,9 @@ hrf = np.load('hrf.npy')
 for i, (run, event) in enumerate(zip(runs, events)):
     print(f'run {i}')
     y = nib.load(run).get_data()
+    dims = y.shape
     y = np.moveaxis(y, -1,0)
-    y = y.reshape([y.shape[0], -1])
+    y = y.reshape([y.shape[0], -1], order='F')
 
     stimdur = 0.5
     TR = 0.764
@@ -58,3 +59,15 @@ GD = PYG.GLMdenoise(design, data, stim_dur=0.5, tr=0.764, n_jobs=1)
 start = time.time()
 GD.run()
 print(f'Fit took {time.time()-start} seconds!')
+
+brain = np.zeros(len(GD.mean_mask))
+brain[GD.mean_mask] = GD.pseudo_t_stats.mean(0)
+brain = brain.reshape(*dims[:-1], order='F')
+
+
+from glmdenoise.utils.make_image_stack import make_image_stack
+stack = make_image_stack(brain)
+
+plt.imshow(stack)
+
+
