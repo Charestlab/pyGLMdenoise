@@ -55,17 +55,18 @@ for i, (run, event) in enumerate(zip(runs, events)):
     design.append(X)
 
 import time 
-GD = PYG.GLMdenoise(design, data, stim_dur=0.5, tr=0.764, n_jobs=5)
+gd = PYG.GLMdenoise(design, data, tr=0.764, n_jobs=5)
 start = time.time()
-GD.run()
+gd.fit()
 print(f'Fit took {time.time()-start} seconds!')
 
 # plot pseudo T statistics
-brain = np.zeros(len(GD.mean_mask))
-brain[GD.mean_mask] = GD.pseudo_t_stats.mean(0)
+brain = np.zeros(len(gd.mean_mask))
+brain[GD.mean_mask] = gd.pseudo_t_stats.mean(0)
 brain = brain.reshape(*dims[:-1], order='F')
 
 from glmdenoise.utils.make_image_stack import make_image_stack
 stack = make_image_stack(brain)
 
 plt.imshow(stack)
+plt.show()

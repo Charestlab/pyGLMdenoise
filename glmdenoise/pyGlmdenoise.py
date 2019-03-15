@@ -8,7 +8,7 @@ from scipy.io import loadmat
 from tqdm import tqdm
 import warnings
 from joblib import Parallel, delayed
-from glmdenoise.utils.get_poly_matrix import *
+from glmdenoise.utils.make_poly_matrix import *
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 def R2_nom_denom(y, yhat):
@@ -46,7 +46,7 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     whitened_data = []
     whitened_design = []
     for i, (y, X) in enumerate(zip(data, design)):
-        polynomials = get_poly_matrix(X.shape[0], poly_degs)
+        polynomials = make_poly_matrix(X.shape[0], poly_degs)
         if extra_regressors and extra_regressors[0].any():
             polynomials = np.c_[polynomials, extra_regressors[i]]
         
@@ -85,14 +85,30 @@ def fit_runs(data, design):
 
 
 class GLMdenoise():
-    """[summary]
+    """
+    Bad noise, bad noise,
+    Whatcha gonna do
+    Whatcha gonna do
+    When it comes for you
     """
 
-    def __init__(self, design, data, stim_dur=0.5, tr=2, n_jobs=10, n_pcs=20, n_boots=100):
+    def __init__(self, design, data,  tr=2.0, n_jobs=10, n_pcs=20, n_boots=100):
+        """[summary]
+        
+        Arguments:
+            design {[type]} -- [description]
+            data {[type]} -- [description]
+        
+        Keyword Arguments:
+            tr {float} -- TR in seconds (default: {2})
+            n_jobs {int} -- [description] (default: {10})
+            n_pcs {int} -- [description] (default: {20})
+            n_boots {int} -- [description] (default: {100})
+        """
+
         
         self.design = design
         self.data = data
-        self.stim_dur = stim_dur
         self.tr = tr
         self.n_pcs = n_pcs
         self.dims = data[0].shape
@@ -143,7 +159,7 @@ class GLMdenoise():
 
             y = self.data[run]
             # get polynomials
-            polynomials = get_poly_matrix(y.shape[0], self.poly_degs)
+            polynomials = make_poly_matrix(y.shape[0], self.poly_degs)
             # project out polynomials from data and prediction
             y = make_project_matrix(polynomials) @ y 
             yhat = make_project_matrix(polynomials) @ yhat
@@ -158,7 +174,7 @@ class GLMdenoise():
             r2s = np.nan_to_num(1 - (nom / denom)) * 100
         return r2s
 
-    def run(self):
+    def fit(self):
         """
         """
         print('Making initial fit')
@@ -173,7 +189,7 @@ class GLMdenoise():
         for run in self.data:
             noise_pool = run[:, noise_pool_mask]
 
-            polynomials = get_poly_matrix(noise_pool.shape[0], self.poly_degs)
+            polynomials = make_poly_matrix(noise_pool.shape[0], self.poly_degs)
             noise_pool = make_project_matrix(polynomials) @ noise_pool
 
             noise_pool = normalize(noise_pool, axis=0)
@@ -189,7 +205,6 @@ class GLMdenoise():
             self.pc_regressors.append([pc[:, :n_pc] for pc in run_PCAs])
         print('Done!')
 
-
         print('Fit data with PCs...')
         all_r2s =  Parallel(n_jobs=self.n_jobs)(
                     delayed(self.cross_validate)(
@@ -201,15 +216,12 @@ class GLMdenoise():
         all_r2s = np.asarray(all_r2s)
         best_mask = np.any(all_r2s > 0, 0)
         self.xval  = np.nanmedian(all_r2s[:, best_mask], 1)
-        select_pca = select_noise_regressors(np.asarray(self.xval))
-        print(f'Selected {select_pca} number of PCs')
+        self.select_pca = select_noise_regressors(np.asarray(self.xval))
+        print(f'Selected {self.select_pca} number of PCs')
 
-        # plt.plot(xval)
-        # plt.plot(select_pca, xval[select_pca], "o")
-        # plt.show()
 
         whitened_data, whitened_design = whiten_data(
-                        self.data, self.design, self.pc_regressors[select_pca], self.poly_degs)
+                        self.data, self.design, self.pc_regressors[self.select_pca], self.poly_degs)
 
         print('Bootstrapping betas...')
         n_runs = len(self.data)
@@ -228,7 +240,6 @@ class GLMdenoise():
                             range(self.n_boots), desc='Bootstrapping'))
         print('Done!')
 
-
         print('Calculating standard error and final fit')
         boot_betas = np.array(boot_betas)
         self.final_fit = np.median(boot_betas, 0)
@@ -238,10 +249,12 @@ class GLMdenoise():
             percentiles = np.percentile(boot_betas[:, cond, :], [16, 84], axis=0)
             self.standard_error[cond, :] = (percentiles[1, :] - percentiles[0, :])/2
 
-        self.poolse = np.sqrt(np.mean(standard_error**2, axis=0))
+        self.poolse = np.sqrt(np.mean(self.standard_error**2, axis=0))
         with np.errstate(divide="ignore", invalid="ignore"):
-            self.pseudo_t_stats = self.final_fit / self.standard_error
+            self.pseudo_t_stats = np.apply_along_axis(lambda x: x/self.poolse, 1, self.final_fit)
         print('Done')
 
-        # sns.heatmap(pseudo_t_stats.mean(0).reshape((80,80)), xticklabels=False, yticklabels=False)
-        # plt.show()
+    def plot_figures(self):
+        plt.plot(self.xval)
+        plt.plot(self.select_pca, self.xval[self.select_pca], "o")
+        plt.show()

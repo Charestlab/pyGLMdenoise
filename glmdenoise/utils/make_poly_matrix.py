@@ -13,7 +13,7 @@ def make_project_matrix(X):
     X = np.mat(X)
     return np.eye(X.shape[0]) - (X*(np.linalg.inv(X.T*X)*X.T))
 
-def get_poly_matrix(n, degrees):
+def make_poly_matrix(n, degrees):
     """Calculates a matrix of polynomials used to regress them out of your data
 
     Args:
