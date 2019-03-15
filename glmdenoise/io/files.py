@@ -1,4 +1,4 @@
-from glmdenoise.data import run_data
+#from glmdenoise.data import run_data
 from pprint import pprint
 import nibabel
 import pandas
