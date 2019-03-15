@@ -116,15 +116,14 @@ class GLMdenoise():
         self.n_boots = n_boots
         self.n_runs = len(data)
         self.xval = []
+        self.PCA_R2s = None
         # calculate polynomial degrees
         max_poly_deg = int(((data[0].shape[0] * tr) / 60) // 2) + 1
         self.poly_degs = np.arange(max_poly_deg)
 
-
-        
         self.mean_image = np.vstack(data).mean(0)
         self.mean_mask = self.mean_image > np.percentile(self.mean_image, 99) / 2
-        #self.flat_mean_mask = self.mean_mask.flatten()
+
         # reduce data
         self.data = [d[:, self.mean_mask].astype(np.float16) for d in self.data]
 
@@ -142,7 +141,8 @@ class GLMdenoise():
             [array] -- [description]
         """
 
-        whitened_data, whitened_design = whiten_data(self.data, self.design, extra_regressors, self.poly_degs)
+        whitened_data, whitened_design = whiten_data(
+                        self.data, self.design, extra_regressors, self.poly_degs)
 
         n_runs = len(self.data)
         nom_denom = []
@@ -182,12 +182,12 @@ class GLMdenoise():
         print('Done!')
 
         print('Getting noise pool')
-        noise_pool_mask = (r2s_initial < 0)
+        self.noise_pool_mask = (r2s_initial < 0)
 
         print('Calculating PCs...')
         run_PCAs = []
         for run in self.data:
-            noise_pool = run[:, noise_pool_mask]
+            noise_pool = run[:, self.noise_pool_mask]
 
             polynomials = make_poly_matrix(noise_pool.shape[0], self.poly_degs)
             noise_pool = make_project_matrix(polynomials) @ noise_pool
@@ -206,16 +206,16 @@ class GLMdenoise():
         print('Done!')
 
         print('Fit data with PCs...')
-        all_r2s =  Parallel(n_jobs=self.n_jobs)(
+        self.PCA_R2s =  Parallel(n_jobs=self.n_jobs)(
                     delayed(self.cross_validate)(
                         self.pc_regressors[x]) for x in tqdm(
                             range(self.n_pcs), desc='Number of PCs'))
         print('Done!')
 
         # calculate best number of PCs
-        all_r2s = np.asarray(all_r2s)
-        best_mask = np.any(all_r2s > 0, 0)
-        self.xval  = np.nanmedian(all_r2s[:, best_mask], 1)
+        self.PCA_R2s = np.asarray(self.PCA_R2s)
+        best_mask = np.any(self.PCA_R2s > 0, 0)
+        self.xval  = np.nanmedian(self.PCA_R2s[:, best_mask], 1)
         self.select_pca = select_noise_regressors(np.asarray(self.xval))
         print(f'Selected {self.select_pca} number of PCs')
 
@@ -229,7 +229,7 @@ class GLMdenoise():
 
         boot_data = []
         boot_design = []
-        for b in range(self.n_boots):
+        for _ in range(self.n_boots):
             boot_inds = np.random.choice(np.arange(n_runs), n_runs)
             boot_data.append([whitened_data[ind] for ind in boot_inds])
             boot_design.append([whitened_design[ind] for ind in boot_inds])
