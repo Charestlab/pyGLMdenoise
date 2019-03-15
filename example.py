@@ -55,7 +55,7 @@ for i, (run, event) in enumerate(zip(runs, events)):
     design.append(X)
 
 import time 
-gd = PYG.GLMdenoise(design, data, tr=0.764, n_jobs=5)
+gd = PYG.GLMdenoise(design, data, tr=0.764, n_jobs=1)
 start = time.time()
 gd.fit()
 print(f'Fit took {time.time()-start} seconds!')

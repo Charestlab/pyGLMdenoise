@@ -45,6 +45,7 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     # whiten data
     whitened_data = []
     whitened_design = []
+    
     for i, (y, X) in enumerate(zip(data, design)):
         polynomials = make_poly_matrix(X.shape[0], poly_degs)
         if extra_regressors and extra_regressors[0].any():
@@ -82,6 +83,52 @@ def fit_runs(data, design):
 
     return betas
 
+def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5)):
+    """[summary]
+    
+    Arguments:
+        data {list} -- [description]
+        design {list} -- [description]
+    
+    Keyword Arguments:
+        extra_regressors {bool/list} -- [description] (default: {False})
+    
+    Returns:
+        [array] -- [description]
+    """
+
+    whitened_data, whitened_design = whiten_data(
+                   data,design, extra_regressors,poly_degs)
+
+    n_runs = len(data)
+    nom_denom = []
+    for run in tqdm(range(n_runs), desc='Cross-validating run'):
+        # fit data using all the other runs
+        mask = np.arange(n_runs) != run
+
+        betas = fit_runs(
+            list(compress(whitened_data, mask)),
+            list(compress(whitened_design, mask)))
+
+        # predict left-out run with vanilla design matrix
+        yhat = design[run] @ betas
+
+        y = data[run]
+        # get polynomials
+        polynomials = make_poly_matrix(y.shape[0],poly_degs)
+        # project out polynomials from data and prediction
+        y = make_project_matrix(polynomials) @ y 
+        yhat = make_project_matrix(polynomials) @ yhat
+
+        nom, denom = R2_nom_denom(y, yhat)
+        nom_denom.append((nom, denom))
+    
+    # calculate R2
+    nom = np.array(nom_denom).sum(0)[0, :]
+    denom = np.array(nom_denom).sum(0)[1, :]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        r2s = np.nan_to_num(1 - (nom / denom)) * 100
+    return r2s
 
 
 class GLMdenoise():
@@ -127,58 +174,12 @@ class GLMdenoise():
         # reduce data
         self.data = [d[:, self.mean_mask].astype(np.float16) for d in self.data]
 
-    def cross_validate(self, extra_regressors=False):
-        """[summary]
-        
-        Arguments:
-            data {list} -- [description]
-            design {list} -- [description]
-        
-        Keyword Arguments:
-            extra_regressors {bool/list} -- [description] (default: {False})
-        
-        Returns:
-            [array] -- [description]
-        """
-
-        whitened_data, whitened_design = whiten_data(
-                        self.data, self.design, extra_regressors, self.poly_degs)
-
-        n_runs = len(self.data)
-        nom_denom = []
-        for run in tqdm(range(n_runs), desc='Cross-validating run'):
-            # fit data using all the other runs
-            mask = np.arange(n_runs) != run
-
-            betas = fit_runs(
-                list(compress(whitened_data, mask)),
-                list(compress(whitened_design, mask)))
-
-            # predict left-out run with vanilla design matrix
-            yhat = self.design[run] @ betas
-
-            y = self.data[run]
-            # get polynomials
-            polynomials = make_poly_matrix(y.shape[0], self.poly_degs)
-            # project out polynomials from data and prediction
-            y = make_project_matrix(polynomials) @ y 
-            yhat = make_project_matrix(polynomials) @ yhat
-
-            nom, denom = R2_nom_denom(y, yhat)
-            nom_denom.append((nom, denom))
-        
-        # calculate R2
-        nom = np.array(nom_denom).sum(0)[0, :]
-        denom = np.array(nom_denom).sum(0)[1, :]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            r2s = np.nan_to_num(1 - (nom / denom)) * 100
-        return r2s
 
     def fit(self):
         """
         """
         print('Making initial fit')
-        r2s_initial= self.cross_validate()
+        r2s_initial= cross_validate(self.data, self.design, poly_degs=self.poly_degs)
         print('Done!')
 
         print('Getting noise pool')
@@ -207,8 +208,8 @@ class GLMdenoise():
 
         print('Fit data with PCs...')
         self.PCA_R2s =  Parallel(n_jobs=self.n_jobs)(
-                    delayed(self.cross_validate)(
-                        self.pc_regressors[x]) for x in tqdm(
+                    delayed(cross_validate)(self.data, self.design,
+                        self.pc_regressors[x], self.poly_degs) for x in tqdm(
                             range(self.n_pcs), desc='Number of PCs'))
         print('Done!')
 
