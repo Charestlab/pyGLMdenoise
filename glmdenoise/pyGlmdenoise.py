@@ -55,7 +55,9 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
         whitened_data.append(make_project_matrix(polynomials) @ y)
 
     return whitened_data, whitened_design
-    
+
+from numba import autojit, prange
+@autojit
 def fit_runs(data, design):
     """Fits a least square of combined runs. 
        The matrix addition is equivalent to concatenating the list of data and the list of
@@ -75,11 +77,11 @@ def fit_runs(data, design):
     betas = 0
     start_col = 0
 
-    for run in (data):
-        n_vols = run.shape[0]
+    for run in prange(len(data)):
+        n_vols = data[run].shape[0]
         these_cols = np.arange(n_vols) + start_col
-        betas += X[:, these_cols] @ run
-        start_col += run.shape[0]
+        betas += X[:, these_cols] @ data[run]
+        start_col += data[run].shape[0]
 
     return betas
 
@@ -87,15 +89,17 @@ def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5))
     """[summary]
     
     Arguments:
-        data {list} -- [description]
-        design {list} -- [description]
+        data {[type]} -- [description]
+        design {[type]} -- [description]
     
     Keyword Arguments:
-        extra_regressors {bool/list} -- [description] (default: {False})
+        extra_regressors {bool} -- [description] (default: {False})
+        poly_degs {[type]} -- [description] (default: {np.arange(5)})
     
     Returns:
-        [array] -- [description]
+        [type] -- [description]
     """
+
 
     whitened_data, whitened_design = whiten_data(
                    data,design, extra_regressors,poly_degs)
@@ -139,7 +143,7 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data,  tr=2.0, n_jobs=10, n_pcs=20, n_boots=100):
+    def __init__(self, design, data, tr=2.0, n_jobs=10, n_pcs=20, n_boots=100):
         """[summary]
         
         Arguments:
@@ -163,7 +167,7 @@ class GLMdenoise():
         self.n_boots = n_boots
         self.n_runs = len(data)
         self.xval = []
-        self.PCA_R2s = None
+        self.PCA_R2s = []
         # calculate polynomial degrees
         max_poly_deg = int(((data[0].shape[0] * tr) / 60) // 2) + 1
         self.poly_degs = np.arange(max_poly_deg)
@@ -207,7 +211,7 @@ class GLMdenoise():
         print('Done!')
 
         print('Fit data with PCs...')
-        self.PCA_R2s =  Parallel(n_jobs=self.n_jobs)(
+        self.PCA_R2s =  Parallel(n_jobs=self.n_jobs, backend='threading')(
                     delayed(cross_validate)(self.data, self.design,
                         self.pc_regressors[x], self.poly_degs) for x in tqdm(
                             range(self.n_pcs), desc='Number of PCs'))
@@ -222,7 +226,9 @@ class GLMdenoise():
 
 
         whitened_data, whitened_design = whiten_data(
-                        self.data, self.design, self.pc_regressors[self.select_pca], self.poly_degs)
+                        self.data, self.design,
+                        self.pc_regressors[self.select_pca], 
+                        self.poly_degs)
 
         print('Bootstrapping betas...')
         n_runs = len(self.data)
@@ -235,7 +241,7 @@ class GLMdenoise():
             boot_data.append([whitened_data[ind] for ind in boot_inds])
             boot_design.append([whitened_design[ind] for ind in boot_inds])
 
-        boot_betas =  Parallel(n_jobs=self.n_jobs)(
+        boot_betas =  Parallel(n_jobs=self.n_jobs, backend='threading')(
                     delayed(fit_runs)(
                         boot_data[x], boot_design[x]) for x in tqdm(
                             range(self.n_boots), desc='Bootstrapping'))
