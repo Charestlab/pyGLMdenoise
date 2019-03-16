@@ -1,3 +1,4 @@
+from numba import autojit, prange
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -10,6 +11,7 @@ import warnings
 from joblib import Parallel, delayed
 from glmdenoise.utils.make_poly_matrix import *
 warnings.simplefilter(action="ignore", category=FutureWarning)
+
 
 def R2_nom_denom(y, yhat):
     """ Calculates the nominator and denomitor for calculating R-squared
@@ -27,17 +29,18 @@ def R2_nom_denom(y, yhat):
         denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
     return nom, denom
 
+
 def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     """[summary]
-    
+
     Arguments:
         data {[type]} -- [description]
         design {[type]} -- [description]
-    
+
     Keyword Arguments:
         extra_regressors {bool} -- [description] (default: {False})
         poly_degs {[type]} -- [description] (default: {np.arange(5)})
-    
+
     Returns:
         [type] -- [description]
     """
@@ -45,18 +48,18 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     # whiten data
     whitened_data = []
     whitened_design = []
-    
+
     for i, (y, X) in enumerate(zip(data, design)):
         polynomials = make_poly_matrix(X.shape[0], poly_degs)
         if extra_regressors and extra_regressors[0].any():
             polynomials = np.c_[polynomials, extra_regressors[i]]
-        
+
         whitened_design.append(make_project_matrix(polynomials) @ X)
         whitened_data.append(make_project_matrix(polynomials) @ y)
 
     return whitened_data, whitened_design
 
-from numba import autojit, prange
+
 @autojit
 def fit_runs(data, design):
     """Fits a least square of combined runs. 
@@ -66,11 +69,11 @@ def fit_runs(data, design):
         runs {list} -- List of runs. Each run is an TR x voxel sized array
         DM {list} -- List of design matrices. Each design matrix 
                      is an TR x predictor sizec array
-    
+
     Returns:
         [array] -- betas from fit
     """
-    
+
     X = np.vstack(design)
     X = np.linalg.inv(X.T @ X) @ X.T
 
@@ -85,24 +88,24 @@ def fit_runs(data, design):
 
     return betas
 
+
 def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     """[summary]
-    
+
     Arguments:
         data {[type]} -- [description]
         design {[type]} -- [description]
-    
+
     Keyword Arguments:
         extra_regressors {bool} -- [description] (default: {False})
         poly_degs {[type]} -- [description] (default: {np.arange(5)})
-    
+
     Returns:
         [type] -- [description]
     """
 
-
     whitened_data, whitened_design = whiten_data(
-                   data,design, extra_regressors,poly_degs)
+        data, design, extra_regressors, poly_degs)
 
     n_runs = len(data)
     nom_denom = []
@@ -119,14 +122,14 @@ def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5))
 
         y = data[run]
         # get polynomials
-        polynomials = make_poly_matrix(y.shape[0],poly_degs)
+        polynomials = make_poly_matrix(y.shape[0], poly_degs)
         # project out polynomials from data and prediction
-        y = make_project_matrix(polynomials) @ y 
+        y = make_project_matrix(polynomials) @ y
         yhat = make_project_matrix(polynomials) @ yhat
 
         nom, denom = R2_nom_denom(y, yhat)
         nom_denom.append((nom, denom))
-    
+
     # calculate R2
     nom = np.array(nom_denom).sum(0)[0, :]
     denom = np.array(nom_denom).sum(0)[1, :]
@@ -145,11 +148,11 @@ class GLMdenoise():
 
     def __init__(self, design, data, tr=2.0, n_jobs=10, n_pcs=20, n_boots=100):
         """[summary]
-        
+
         Arguments:
             design {[type]} -- [description]
             data {[type]} -- [description]
-        
+
         Keyword Arguments:
             tr {float} -- TR in seconds (default: {2})
             n_jobs {int} -- [description] (default: {10})
@@ -157,7 +160,6 @@ class GLMdenoise():
             n_boots {int} -- [description] (default: {100})
         """
 
-        
         self.design = design
         self.data = data
         self.tr = tr
@@ -173,17 +175,19 @@ class GLMdenoise():
         self.poly_degs = np.arange(max_poly_deg)
 
         self.mean_image = np.vstack(data).mean(0)
-        self.mean_mask = self.mean_image > np.percentile(self.mean_image, 99) / 2
+        self.mean_mask = self.mean_image > np.percentile(
+            self.mean_image, 99) / 2
 
         # reduce data
-        self.data = [d[:, self.mean_mask].astype(np.float16) for d in self.data]
-
+        self.data = [d[:, self.mean_mask].astype(
+            np.float16) for d in self.data]
 
     def fit(self):
         """
         """
         print('Making initial fit')
-        r2s_initial= cross_validate(self.data, self.design, poly_degs=self.poly_degs)
+        r2s_initial = cross_validate(
+            self.data, self.design, poly_degs=self.poly_degs)
         print('Done!')
 
         print('Getting noise pool')
@@ -201,7 +205,7 @@ class GLMdenoise():
 
             noise_pool = noise_pool @ noise_pool.T
             u = np.linalg.svd(noise_pool)[0]
-            u =  u[:, :21]
+            u = u[:, :21]
             u = u / np.std(u, 0)
             run_PCAs.append(u)
 
@@ -211,24 +215,23 @@ class GLMdenoise():
         print('Done!')
 
         print('Fit data with PCs...')
-        self.PCA_R2s =  Parallel(n_jobs=self.n_jobs, backend='threading')(
-                    delayed(cross_validate)(self.data, self.design,
-                        self.pc_regressors[x], self.poly_degs) for x in tqdm(
-                            range(self.n_pcs), desc='Number of PCs'))
+        self.PCA_R2s = Parallel(n_jobs=self.n_jobs, backend='threading')(
+            delayed(cross_validate)(self.data, self.design,
+                                    self.pc_regressors[x], self.poly_degs) for x in tqdm(
+                range(self.n_pcs), desc='Number of PCs'))
         print('Done!')
 
         # calculate best number of PCs
         self.PCA_R2s = np.asarray(self.PCA_R2s)
         best_mask = np.any(self.PCA_R2s > 0, 0)
-        self.xval  = np.nanmedian(self.PCA_R2s[:, best_mask], 1)
+        self.xval = np.nanmedian(self.PCA_R2s[:, best_mask], 1)
         self.select_pca = select_noise_regressors(np.asarray(self.xval))
         print(f'Selected {self.select_pca} number of PCs')
 
-
         whitened_data, whitened_design = whiten_data(
-                        self.data, self.design,
-                        self.pc_regressors[self.select_pca], 
-                        self.poly_degs)
+            self.data, self.design,
+            self.pc_regressors[self.select_pca],
+            self.poly_degs)
 
         print('Bootstrapping betas...')
         n_runs = len(self.data)
@@ -241,10 +244,10 @@ class GLMdenoise():
             boot_data.append([whitened_data[ind] for ind in boot_inds])
             boot_design.append([whitened_design[ind] for ind in boot_inds])
 
-        boot_betas =  Parallel(n_jobs=self.n_jobs, backend='threading')(
-                    delayed(fit_runs)(
-                        boot_data[x], boot_design[x]) for x in tqdm(
-                            range(self.n_boots), desc='Bootstrapping'))
+        boot_betas = Parallel(n_jobs=self.n_jobs, backend='threading')(
+            delayed(fit_runs)(
+                boot_data[x], boot_design[x]) for x in tqdm(
+                range(self.n_boots), desc='Bootstrapping'))
         print('Done!')
 
         print('Calculating standard error and final fit')
@@ -253,12 +256,15 @@ class GLMdenoise():
         n_conds = boot_betas.shape[1]
         self.standard_error = np.zeros((self.final_fit.shape))
         for cond in range(n_conds):
-            percentiles = np.percentile(boot_betas[:, cond, :], [16, 84], axis=0)
-            self.standard_error[cond, :] = (percentiles[1, :] - percentiles[0, :])/2
+            percentiles = np.percentile(
+                boot_betas[:, cond, :], [16, 84], axis=0)
+            self.standard_error[cond, :] = (
+                percentiles[1, :] - percentiles[0, :])/2
 
         self.poolse = np.sqrt(np.mean(self.standard_error**2, axis=0))
         with np.errstate(divide="ignore", invalid="ignore"):
-            self.pseudo_t_stats = np.apply_along_axis(lambda x: x/self.poolse, 1, self.final_fit)
+            self.pseudo_t_stats = np.apply_along_axis(
+                lambda x: x/self.poolse, 1, self.final_fit)
         print('Done')
 
     def plot_figures(self):
