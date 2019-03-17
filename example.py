@@ -73,6 +73,15 @@ for i, (run, event) in enumerate(zip(runs, eventfs)):
     polymatrix.append(make_project_matrix(polynomials))
     data.append(np.array(polymatrix[i] @ y).astype(np.float32))
 
+
+mean_image = np.vstack(data).mean(0)
+mean_mask = mean_image > np.percentile(
+    mean_image, 99) / 2
+
+# reduce data (optional saves a lot of memory)
+data = [d[:, mean_mask].astype(
+    np.float32) for d in data]
+
 hrfparams = optimiseHRF(
     eventdesign,
     data,
