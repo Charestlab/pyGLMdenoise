@@ -42,9 +42,16 @@ eventfs = compress(eventfs, np.arange(len(eventfs)) != 1)
 
 data = []
 design = []
-eventdesign = []
-polymatrix = []
-hrf = normalisemax(getcanonicalhrf(stimdur, TR))
+
+params = {}
+params['hrf'] = normalisemax(getcanonicalhrf(stimdur, TR))
+params['tr'] = TR
+params['numforhrf'] = 50
+params['hrfthresh'] = 0.5
+params['hrffitmask'] = 1
+params['R2thresh'] = 0
+params['hrfmodel'] = 'optimise'  # 'assume'
+
 for i, (run, event) in enumerate(zip(runs, eventfs)):
     print(f'run {i}')
     y = nib.load(run).get_data().astype(np.float32)
@@ -65,62 +72,23 @@ for i, (run, event) in enumerate(zip(runs, eventfs)):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    eventdesign.append(events)
-    X = make_design(events, TR, n_volumes)
-
-    max_poly_deg = np.arange(int(((X.shape[0] * TR) / 60) // 2) + 1)
-    polynomials = make_poly_matrix(X.shape[0], max_poly_deg)
-    polymatrix.append(make_project_matrix(polynomials))
-    data.append(np.array(polymatrix[i] @ y).astype(np.float32))
-
-
-mean_image = np.vstack(data).mean(0)
-mean_mask = mean_image > np.percentile(
-    mean_image, 99) / 2
-
-# reduce data (optional saves a lot of memory)
-data = [d[:, mean_mask].astype(
-    np.float32) for d in data]
-
-hrfparams = optimiseHRF(
-    eventdesign,
-    data,
-    TR,
-    hrf,
-    polymatrix)
-
-raise ValueError
-
-design = hrfparams['convdesign']
-
-runs = glob.glob(os.path.join(fmri_folder, 'ses*', 'func', '*preproc*nii.gz'))
-runs.sort()
-eventfs = glob.glob(os.path.join(fmri_folder, 'ses*', 'func', '*_events.tsv'))
-eventfs.sort()
-runs = compress(runs, np.arange(len(runs)) != 1)
-eventfs = compress(eventfs, np.arange(len(eventfs)) != 1)
-
-data = []
-for i, (run, event) in enumerate(zip(runs, eventfs)):
-    print(f'run {i}')
-    y = nib.load(run).get_data()
-    dims = y.shape
-    y = np.moveaxis(y, -1, 0)
-    y = y.reshape([y.shape[0], -1])
-    n_volumes = y.shape[0]
+    # pass in the events data frame. the convolving of the HRF now
+    # happens internally
+    design.append(events)
     data.append(y)
 
-gd = PYG.GLMdenoise(design, data, tr=0.764, n_jobs=2)
+
+gd = PYG.GLMdenoise(design, data, params, n_jobs=2)
 start = time.time()
 gd.fit()
 print(f'Fit took {format_time(time.time()-start)}!')
 
 # plot pseudo T statistics
-brain = np.zeros(len(gd.mean_mask))
-brain[gd.mean_mask] = gd.pseudo_t_stats.mean(0)
+brain = np.zeros(len(gd.results['mean_mask']))
+brain[gd.results['mean_mask']] = gd.results['pseudo_t_stats'].mean(0)
 brain = brain.reshape(*dims[:-1])
 
 stack = make_image_stack(brain)
 
-plt.imshow(stack)
+sns.heatmap(stack)
 plt.show()
