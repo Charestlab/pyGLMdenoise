@@ -51,6 +51,7 @@ params['hrfthresh'] = 0.5
 params['hrffitmask'] = 1
 params['R2thresh'] = 0
 params['hrfmodel'] = 'optimise'  # 'assume'
+params['extra_regressors'] = False
 
 for i, (run, event) in enumerate(zip(runs, eventfs)):
     print(f'run {i}')

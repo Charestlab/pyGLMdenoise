@@ -51,8 +51,9 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
 
     for i, (y, X) in enumerate(zip(data, design)):
         polynomials = make_poly_matrix(X.shape[0], poly_degs)
-        if extra_regressors and extra_regressors[0].any():
-            polynomials = np.c_[polynomials, extra_regressors[i]]
+        if extra_regressors:
+            if extra_regressors[i].any():
+                polynomials = np.c_[polynomials, extra_regressors[i]]
 
         whitened_design.append(make_project_matrix(polynomials) @ X)
         whitened_data.append(make_project_matrix(polynomials) @ y)
@@ -171,6 +172,7 @@ class GLMdenoise():
         self.params = params
         self.params['n_pcs'] = n_pcs
         self.tr = params['tr']
+        self.extra_regressors = params['extra_regressors']
         self.n_pcs = n_pcs
         self.dims = data[0].shape
         self.n_jobs = n_jobs
@@ -208,11 +210,14 @@ class GLMdenoise():
                 max_poly_deg = np.arange(
                     int(((X.shape[0] * self.tr) / 60) // 2) + 1)
                 polynomials = make_poly_matrix(X.shape[0], max_poly_deg)
+                if self.extra_regressors:
+                    polynomials = np.c_[polynomials,
+                                        self.extra_regressors[run]]
                 polymatrix.append(make_project_matrix(polynomials))
 
             # optimise hrf requires whitening of the data
             whitened_data, whitened_design = whiten_data(
-                self.data, convdes, poly_degs=self.poly_degs)
+                self.data, convdes, self.extra_regressors, poly_degs=self.poly_degs)
 
             hrfparams = optimiseHRF(
                 self.design,
@@ -240,7 +245,7 @@ class GLMdenoise():
 
         print('Making initial fit')
         r2s_initial = cross_validate(
-            self.data, self.design, poly_degs=self.poly_degs)[0]
+            self.data, self.design, self.extra_regressors, poly_degs=self.poly_degs)[0]
         print('Done!')
 
         print('Getting noise pool')
