@@ -1,9 +1,12 @@
+from ipdb import set_trace
 from numba import autojit, prange
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
+from glmdenoise.utils.optimiseHRF import *
+from glmdenoise.report import Report
 from itertools import compress
 from scipy.io import loadmat
 from tqdm import tqdm
@@ -153,7 +156,7 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data, params, n_jobs=10, n_pcs=20, n_boots=100):
+    def __init__(self, design, data, params, n_jobs=10, n_pcs=11, n_boots=10):
         """[summary]
 
         Arguments:
@@ -198,7 +201,6 @@ class GLMdenoise():
         """
         if self.params['hrfmodel'] == 'optimise':
             print('Optimising HRF...')
-            from glmdenoise.utils.optimiseHRF import optimiseHRF
             convdes = []
             polymatrix = []
             for run in range(self.n_runs):
@@ -286,7 +288,8 @@ class GLMdenoise():
         self.results['PCA_R2s'] = np.vstack(
             np.asarray(np.asarray(PCresults)[:, 0]))
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
-        self.results['PCA_run_betas'] = np.asarray(np.asarray(PCresults)[:, 2])
+        self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
+        set_trace()
         best_mask = np.any(
             self.results['PCA_R2s'] > self.params['R2thresh'], 0)
         self.results['xval'] = np.nanmedian(
@@ -303,22 +306,22 @@ class GLMdenoise():
             self.data, self.design,
             poly_degs=self.poly_degs)
 
-        vanilla_betas = []
-        vanilla_boot_data = []
-        vanilla_boot_design = []
+        boot_betas = []
+        boot_data = []
+        boot_design = []
         for _ in range(self.n_boots):
             boot_inds = np.random.choice(np.arange(n_runs), n_runs)
-            vanilla_boot_data.append([self.data[ind] for ind in boot_inds])
-            vanilla_boot_design.append(
+            boot_data.append([self.data[ind] for ind in boot_inds])
+            boot_design.append(
                 [whitened_design[ind] for ind in boot_inds])
 
-        vanilla_betas = Parallel(n_jobs=self.n_jobs, backend='threading')(
+        boot_betas = Parallel(n_jobs=self.n_jobs, backend='threading')(
             delayed(fit_runs)(
-                vanilla_boot_data[x], vanilla_boot_design[x]) for x in tqdm(
+                boot_data[x], boot_design[x]) for x in tqdm(
                 range(self.n_boots), desc='Bootstrapping'))
 
-        vanilla_betas = np.array(vanilla_betas)
-        self.results['vanilla_fit'] = np.median(vanilla_betas, 0)
+        boot_betas = np.array(boot_betas)
+        self.results['vanilla_fit'] = np.median(boot_betas, 0)
         print('Done!')
 
         print('Bootstrapping betas (Denoising).')
@@ -342,7 +345,6 @@ class GLMdenoise():
             delayed(fit_runs)(
                 boot_data[x], boot_design[x]) for x in tqdm(
                 range(self.n_boots), desc='Bootstrapping'))
-        print('Done!')
 
         print('Calculating standard error and final fit')
         boot_betas = np.array(boot_betas)
@@ -361,9 +363,87 @@ class GLMdenoise():
         with np.errstate(divide="ignore", invalid="ignore"):
             self.results['pseudo_t_stats'] = np.apply_along_axis(
                 lambda x: x/self.results['poolse'], 1, self.results['final_fit'])
+
+        print('Calculating overall R2 of final fit...')
+
+        stackdesign = np.vstack(whitened_design)
+        modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
+        self.results['R2s'] = calccodStack(
+            whitened_data,
+            modelfits)
+        """ TO DO
+        self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
+                                  for c_run in range(self.n_runs)]
+        """
         print('Done')
 
     def plot_figures(self):
-        plt.plot(self.xval)
-        plt.plot(self.select_pca, self.xval[self.select_pca], "o")
-        plt.show()
+        # start a new report with figures
+        report = Report()
+        report.spatialdims = self.params['xyzsize']
+
+        # plot solutions
+        title = 'HRF fit'
+        report.plot_hrf(self.hrfparams['hrfseed'],
+                        self.hrfparams['hrf'], self.tr, title)
+        report.plot_image(self.hrfparams['hrffitvoxels'], title)
+
+        for c_run in range(n_runs):
+            report.plot_scatter_sparse(
+                [
+                    (self.results['PCA_R2s'][0],
+                        self.results['PCA_R2s'][c_run]),
+                    (self.results['PCA_R2s'][0][self.pcvoxels],
+                        self.results['PCA_R2s'][c_run][self.pcvoxels]),
+                ],
+                xlabel='Cross-validated R^2 (0 PCs)',
+                ylabel='Cross-validated R^2 ({p} PCs)',
+                title='PCscatter{p}',
+                crosshairs=True,
+            )
+
+        # plot voxels for noise regressor selection
+        title = 'Noise regressor selection'
+        report.plot_noise_regressors_cutoff(self.results['xval'], self.n_pcs,
+                                            title='Chosen number of regressors')
+        report.plot_image(self.results['noise_pool_mask'], title)
+
+        # various images
+        report.plot_image(self.results['mean_image'], 'Mean volume')
+        report.plot_image(self.results['noise_pool_mask'], 'Noise Pool')
+        report.plot_image(self.results['mean_mask'], 'Noise Exclude')
+        if self.hrfparams['hrffitmask'] != 1:
+            report.plot_image(self.hrfparams['hrffitmask'], 'HRFfitmask')
+        if self.params['pcR2cutoffmask'] != 1:
+            report.plot_image(self.params['pcR2cutoffmask'], 'PCmask')
+
+        for pc in range(self.n_pcs):
+            report.plot_image(
+                self.results['PCA_R2s'][pc],
+                'PCcrossvalidation%02d', dtype='range')
+            report.plot_image(
+                self.results['PCA_R2s'][pc],
+                'PCcrossvalidationscaled%02d', dtype='scaled')
+
+        report.plot_image(self.results['R2s'], 'FinalModel')
+        """ TODO
+        for r in range(n_runs):
+            report.plot_image(
+                self.results['R2srun'][r], 'FinalModel_run%02d')
+        """
+        # PC weights
+        thresh = np.percentile(
+            np.abs(np.vstack(self.results['PCA_weights']).ravel()), 99)
+        for c_run in range(1, self.n_runs):
+            for pc in range(1, self.n_pcas):
+                report.plot_image(
+                    self.results['PCA_weights'][pc][c_run].mean(axis=0),
+                    'PCmap_run%02d_num%02d.png',
+                    dtype='custom',
+                    drange=[-thresh, thresh]
+                )
+
+        # stores html report
+        report.save()
+
+        print('Done')

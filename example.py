@@ -84,12 +84,4 @@ start = time.time()
 gd.fit()
 print(f'Fit took {format_time(time.time()-start)}!')
 
-# plot pseudo T statistics
-brain = np.zeros(len(gd.results['mean_mask']))
-brain[gd.results['mean_mask']] = gd.results['pseudo_t_stats'].mean(0)
-brain = brain.reshape(*dims[:-1])
-
-stack = make_image_stack(brain)
-
-sns.heatmap(stack)
-plt.show()
+gd.plot_figures()
