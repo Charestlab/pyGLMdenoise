@@ -382,26 +382,12 @@ def optimiseHRF(
     numruns = len(design)
 
     postnumlag = numinhrf - 1
-    # precompute for speed
-    convdesignpre = []
 
     # collect ntimes per run
     ntimes = []
 
     for p in range(numruns):
         ntimes.append(data[p].shape[0])
-        # get design matrix
-        X = make_design(design[p], tr, ntimes[p])
-
-        # expand design matrix using delta functions
-        numcond = X.shape[1]
-        # time x L*conditions
-        stimmat = constructStimulusMatrices(
-            X.T, prenumlag=0, postnumlag=postnumlag
-        )
-
-        # time*L x conditions
-        convdesignpre.append(stimmat.reshape(-1, numcond, order='F'))
 
     # loop until convergence
     currenthrf = hrfknobs  # initialize
@@ -434,7 +420,7 @@ def optimiseHRF(
             currentbeta = mtimesStack(olsmatrix(stackdesign), data)
 
             # calculate R^2
-            modelfit = [np.dot(convdesign[p], currentbeta)
+            modelfit = [np.dot(convdesign[p], currentbeta).astype(np.float32)
                         for p in range(numruns)]
 
             R2 = calccodStack(data, modelfit)
@@ -465,12 +451,21 @@ def optimiseHRF(
             convdesign = []
             for p in range(numruns):
 
+                X = make_design(design[p], tr, ntimes[p])
+
+                # expand design matrix using delta functions
+                numcond = X.shape[1]
+                # time x L*conditions
+                stimmat = constructStimulusMatrices(
+                    X.T, prenumlag=0, postnumlag=postnumlag
+                ).reshape(-1, numcond, order='F').astype(np.float32)
+
                 # calc
                 # weight and sum based on the current amplitude estimates.
                 # only include the good voxels.
                 # return shape time*L x voxels
                 convdes = np.dot(
-                    convdesignpre[p], currentbeta[:, hrffitvoxels])
+                    stimmat, currentbeta[:, hrffitvoxels]).astype(np.float32)
 
                 # remove polynomials and extra regressors
                 # time x L*voxels

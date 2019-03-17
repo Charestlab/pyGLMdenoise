@@ -71,7 +71,7 @@ for i, (run, event) in enumerate(zip(runs, eventfs)):
     max_poly_deg = np.arange(int(((X.shape[0] * TR) / 60) // 2) + 1)
     polynomials = make_poly_matrix(X.shape[0], max_poly_deg)
     polymatrix.append(make_project_matrix(polynomials))
-    data.append(polymatrix[i] @ y)
+    data.append(np.array(polymatrix[i] @ y).astype(np.float32))
 
 hrfparams = optimiseHRF(
     eventdesign,
@@ -79,6 +79,8 @@ hrfparams = optimiseHRF(
     TR,
     hrf,
     polymatrix)
+
+raise ValueError
 
 design = hrfparams['convdesign']
 
