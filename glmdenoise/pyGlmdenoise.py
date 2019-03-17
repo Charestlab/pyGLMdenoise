@@ -1,4 +1,3 @@
-from ipdb import set_trace
 from numba import autojit, prange
 import numpy as np
 import matplotlib.pyplot as plt
@@ -289,7 +288,6 @@ class GLMdenoise():
             np.asarray(np.asarray(PCresults)[:, 0]))
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
         self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
-        set_trace()
         best_mask = np.any(
             self.results['PCA_R2s'] > self.params['R2thresh'], 0)
         self.results['xval'] = np.nanmedian(
