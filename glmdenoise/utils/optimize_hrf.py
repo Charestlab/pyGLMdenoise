@@ -282,7 +282,7 @@ def optimiseHRF(
     events, # this is not a events, its a data frame
     data,
     tr,
-    hrfknobs, # should be called hrf_seed
+    hrf_seed,
     polynomials, # this is a polynomial matrix... not combined?
     numforhrf=50, # n_hrf_voxels is better 
     hrfthresh=0.5, # hrf_threshold
@@ -296,14 +296,13 @@ def optimiseHRF(
     where we fit for betas and then fit for hrf using a fir
     like approach.
     Args:
-        events (pandas dataframe): this is a pandas data frame with keys:
+        events (list of pandas dataframe): this is a pandas data frame with keys:
                 ['trial_type']: stimulus condition index
                 ['onset']: onsets in s for each event
                 ['duration']: duration for each event
-        data (2d array): data (time x vox). this data should already
-                have polynomials projected out.
+        data (list of numpy arrays): data (x, y, z, time).
         tr (float): the sampling rate in seconds
-        hrfknobs (1d array):should be time x 1 with the initial seed
+        hrf_seed (1d array):should be time x 1 with the initial seed
                 for the HRF.  The length of this vector indicates the
                 number of time points that we will attempt to estimate
                 in the HRF.
@@ -336,7 +335,7 @@ def optimiseHRF(
     minR2 = 0.99
 
     # calc
-    numinhrf = len(hrfknobs)
+    numinhrf = len(hrf_seed)
 
     numruns = len(events)
 
@@ -345,10 +344,10 @@ def optimiseHRF(
     # we should remove non-brain voxels 
     data = [np.moveaxis(y, -1, 0) for y in data]
     data = [y.reshape((y.shape[0], -1)) for y in data]
-    mean_image = np.vstack(data).mean(0)
-    mean_mask = mean_image > np.percentile(mean_image, 99) / 2
-    # reduce data
-    data = [d[:, mean_mask].astype(np.float16) for d in data]
+    # mean_image = np.vstack(data).mean(0)
+    # mean_mask = mean_image > np.percentile(mean_image, 99) / 2
+    # # reduce data
+    # data = [d[:, mean_mask].astype(np.float16) for d in data]
 
     # project out polynomials
     data = [p @ d for p, d in zip(polynomials, data)]
@@ -360,7 +359,7 @@ def optimiseHRF(
         ntimes.append(data[p].shape[0])
 
     # loop until convergence
-    currenthrf = hrfknobs  # initialize
+    currenthrf = hrf_seed  # initialize
     cnt = 1
     while True:
         print(f'\t optimising hrf :{cnt}\n')
@@ -484,7 +483,7 @@ def optimiseHRF(
     # we want to see that we're not converging in a weird place
     # so we compute the coefficient of determination between the
     # current estimate and the seed hrf
-    hrfR2 = calccod(hrfknobs, previoushrf, wantmeansub=0)
+    hrfR2 = calccod(hrf_seed, previoushrf, wantmeansub=0)
 
     # sanity check to make sure that we are not doing worse.
     if hrfR2 < hrfthresh:
@@ -493,7 +492,7 @@ def optimiseHRF(
             "probably indicating low SNR.  We are just going to"
             "use the initial seed as the HRF estimate.\n"
         )
-        final_hrf = hrfknobs
+        final_hrf = hrf_seed
     else:
         final_hrf = previoushrf
 

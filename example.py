@@ -10,6 +10,7 @@ import nibabel as nib
 from itertools import compress
 from glmdenoise.utils.optimize_hrf import optimiseHRF
 from glmdenoise.utils.make_poly_matrix import *
+import time
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 def format_time(time):
@@ -60,7 +61,9 @@ polynomials = [make_poly_matrix(y.shape[-1], np.arange(5)) for y in data]
 polynomials = [make_project_matrix(p) for p in polynomials]
 # It makes more sense to me if this function only returns the optimized hrf and
 # maybe maybe the convolved DM.
+start = time.time()
 convolved_design, optimized_hrf = optimiseHRF(design, data, TR, hrf, polynomials)
+print(f'Optimized HRF took {format_time(time.time()-start)}!')
 
 # compare new and old hrf
 plt.plot(optimized_hrf, label='New')
