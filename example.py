@@ -52,7 +52,7 @@ for i, (run, event) in enumerate(zip(runs, behavior)):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    X = make_design(events, TR, n_volumes, hrf=None)
+    X = make_design(events, TR, n_volumes, hrf=hrf)
     design.append(X)
 
 # where you can optimize the HRF if needed.

@@ -277,7 +277,6 @@ def convolveDesign(X, hrf):
     return convdes[0:ntime, :]
 
 
-<<<<<<< HEAD
 
 def optimiseHRF(
     design, # this is not a design, its a data frame
@@ -288,17 +287,6 @@ def optimiseHRF(
     numforhrf=50, # n_hrf_voxels is better 
     hrfthresh=0.5, # hrf_threshold
     hrffitmask=1, # just mask, I guess
-=======
-def optimiseHRF(
-    design,
-    data,
-    tr,
-    hrfknobs,
-    combinedmatrix,
-    numforhrf=50,
-    hrfthresh=0.5,
-    hrffitmask=1,
->>>>>>> 59f55a61c55667c30d3d69350a20653fd27215d5
 
 
 ):
@@ -354,7 +342,6 @@ def optimiseHRF(
 
     postnumlag = numinhrf - 1
 
-<<<<<<< HEAD
     # we should remove non-brain voxels 
     data = [np.moveaxis(y, -1, 0) for y in data]
     data = [y.reshape((y.shape[0], -1)) for y in data]
@@ -363,11 +350,6 @@ def optimiseHRF(
     # reduce data
     data = [d[:, mean_mask].astype(np.float16) for d in data]
 
-=======
-    data = [np.moveaxis(y, -1, 0) for y in data]
-    data = [y.reshape((y.shape[0], -1)) for y in data]
-    
->>>>>>> 59f55a61c55667c30d3d69350a20653fd27215d5
     # collect ntimes per run
     ntimes = []
     
