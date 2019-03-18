@@ -14,12 +14,12 @@ from glmdenoise.utils.isrowvector import isrowvector as isr
 
 
 def normalisemax(m, dim=None):
-  # input
-  if dim is None:
-      dim = ch(isr(m), 1, 0)
-  # do it
-  if dim == 0:
-      f = m / np.max(m)
-  else:
-      f = m / np.max(m, dim)
-  return f
+    # input
+    if dim is None:
+        dim = ch(isr(m), 1, 0)
+    # do it
+    if dim == 0:
+        f = m / np.max(m)
+    else:
+        f = m / np.max(m, dim)
+    return f

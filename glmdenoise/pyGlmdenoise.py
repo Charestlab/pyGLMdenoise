@@ -4,14 +4,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.optimiseHRF import *
+from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
 from glmdenoise.report import Report
 from itertools import compress
 from scipy.io import loadmat
 from tqdm import tqdm
 import warnings
 from joblib import Parallel, delayed
-from glmdenoise.utils.make_poly_matrix import *
+from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -155,7 +155,7 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data, params, n_jobs=10, n_pcs=11, n_boots=10):
+    def __init__(self, design, data, params, n_jobs=1, n_pcs=20, n_boots=100):
         """[summary]
 
         Arguments:
@@ -386,7 +386,7 @@ class GLMdenoise():
                         self.hrfparams['hrf'], self.tr, title)
         report.plot_image(self.hrfparams['hrffitvoxels'], title)
 
-        for c_run in range(n_runs):
+        for c_run in range(self.n_runs):
             report.plot_scatter_sparse(
                 [
                     (self.results['PCA_R2s'][0],
@@ -402,7 +402,8 @@ class GLMdenoise():
 
         # plot voxels for noise regressor selection
         title = 'Noise regressor selection'
-        report.plot_noise_regressors_cutoff(self.results['xval'], self.n_pcs,
+        report.plot_noise_regressors_cutoff(self.results['xval'],
+                                            self.n_pcs,
                                             title='Chosen number of regressors')
         report.plot_image(self.results['noise_pool_mask'], title)
 
