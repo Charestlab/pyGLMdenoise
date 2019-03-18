@@ -12,15 +12,14 @@ from glmdenoise.utils.optimize_hrf import optimiseHRF
 from glmdenoise.utils.make_poly_matrix import *
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
+def format_time(time):
+    return f'{int(time//60)} minutes and {time-(time//60)*60:.2f} seconds'
+
 """
 Load data
 """
 
-def format_time(time):
-    return f'{int(time//60)} minutes and {time-(time//60)*60:.2f} seconds'
-
 fmri_folder = '/home/dlindh/AMS_AB_RSA/preproc/fmriprep/sub-01'
-
 
 runs = glob.glob(os.path.join(fmri_folder, 'ses*', 'func', '*preproc*nii.gz'))
 runs.sort()
@@ -54,11 +53,12 @@ for i, (run, event) in enumerate(zip(runs, behavior)):
     events["trial_type"] = items
 
     X = make_design(events, TR, n_volumes, hrf=None)
-    design.append(events)
+    design.append(X)
 
-polynomials = [make_poly_matrix(y.shape[-1], np.arange(5)) for y in data]
-polynomials = [make_project_matrix(p) for p in polynomials]
-convolved_design, optimized_hrf = optimiseHRF(design, data, TR, hrf, polynomials)
+# where you can optimize the HRF if needed.
+# polynomials = [make_poly_matrix(y.shape[-1], np.arange(5)) for y in data]
+# polynomials = [make_project_matrix(p) for p in polynomials]
+# convolved_design, optimized_hrf = optimiseHRF(design, data, TR, hrf, polynomials)
 
 
 """
