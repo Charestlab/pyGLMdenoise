@@ -30,5 +30,10 @@ setup(
     zip_safe=False,
     install_requires=requires,
     tests_require=requires,
-    test_suite="tests",
+    test_suite='tests',
+    entry_points={
+        'console_scripts': [
+            'glmdenoise = glmdenoise.console:main',
+        ],
+    },
 )
