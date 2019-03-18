@@ -279,7 +279,7 @@ def convolveDesign(X, hrf):
 
 
 def optimiseHRF(
-    design, # this is not a design, its a data frame
+    events, # this is not a events, its a data frame
     data,
     tr,
     hrfknobs, # should be called hrf_seed
@@ -296,7 +296,7 @@ def optimiseHRF(
     where we fit for betas and then fit for hrf using a fir
     like approach.
     Args:
-        design (pandas dataframe): this is a pandas data frame with keys:
+        events (pandas dataframe): this is a pandas data frame with keys:
                 ['trial_type']: stimulus condition index
                 ['onset']: onsets in s for each event
                 ['duration']: duration for each event
@@ -338,7 +338,7 @@ def optimiseHRF(
     # calc
     numinhrf = len(hrfknobs)
 
-    numruns = len(design)
+    numruns = len(events)
 
     postnumlag = numinhrf - 1
 
@@ -373,7 +373,7 @@ def optimiseHRF(
                 # get design matrix with HRF
                 # number of time points
 
-                convdes = make_design(design[p], tr, ntimes[p], currenthrf)
+                convdes = make_design(events[p], tr, ntimes[p], currenthrf)
 
                 # project the polynomials out
                 convdes = np.dot(combinedmatrix[p], convdes)
@@ -419,7 +419,7 @@ def optimiseHRF(
             convdesign = []
             for p in range(numruns):
 
-                X = make_design(design[p], tr, ntimes[p])
+                X = make_design(events[p], tr, ntimes[p])
 
                 # expand design matrix using delta functions
                 numcond = X.shape[1]
@@ -500,7 +500,7 @@ def optimiseHRF(
     for p in range(numruns):
         # get design matrix with HRF
         # number of time points
-        convdes = make_design(design[p], tr, ntimes[p], previoushrf)
+        convdes = make_design(events[p], tr, ntimes[p], previoushrf)
 
         convdesign.append(convdes)
   
