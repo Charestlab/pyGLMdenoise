@@ -1,4 +1,4 @@
-from glmdenoise import pyGLMdenoise as PYG
+from glmdenoise.pyGlmdenoise import GLMdenoise
 from pprint import pprint
 import nibabel
 import pandas
@@ -30,6 +30,6 @@ def run_files(bold_files, event_files, tr):
     params['R2thresh'] = 0
     params['hrfmodel'] = 'optimise'  # 'assume'
     params['extra_regressors'] = False
-    gd = PYG.GLMdenoise(design, data, params, n_jobs=2)
+    gd = GLMdenoise(design, data, params, n_jobs=2)
     gd.fit()
     gd.plot_figures()

@@ -5,9 +5,8 @@ import seaborn as sns
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
-from glmdenoise.utils.select_noise_regressors import select_noise_regressors
+from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.report import Report
-
 from itertools import compress
 from scipy.io import loadmat
 from tqdm import tqdm
