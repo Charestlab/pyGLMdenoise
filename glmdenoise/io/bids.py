@@ -5,13 +5,12 @@ class BidsDirectory(object):
     """BIDS directory querying, currently a wrapper for pybids.BIDSLayout
     """
 
-
     def __init__(self, directory):
         self.layout = BIDSLayout(directory, derivatives=True)
 
     def get_preprocessed_subjects_ids(self):
         return self.layout.get(return_type='id', target='subject')
-    
+
     def get_tasks_for_subject(self, subject):
         return self.layout.get(
             subject=subject,
