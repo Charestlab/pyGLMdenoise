@@ -1,8 +1,12 @@
 numpy
 scipy
+sklearn
 matplotlib
 twine
 sphinx
 seaborn
 pybids==0.8.0
 ww
+numba
+tqdm
+joblib
