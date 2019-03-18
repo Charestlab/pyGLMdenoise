@@ -52,13 +52,21 @@ for i, (run, event) in enumerate(zip(runs, behavior)):
     events["onset"] = onsets
     events["trial_type"] = items
 
-    X = make_design(events, TR, n_volumes, hrf=hrf)
-    design.append(X)
+    #X = make_design(events, TR, n_volumes, hrf=hrf)
+    design.append(events)
 
-# where you can optimize the HRF if needed.
-# polynomials = [make_poly_matrix(y.shape[-1], np.arange(5)) for y in data]
-# polynomials = [make_project_matrix(p) for p in polynomials]
-# convolved_design, optimized_hrf = optimiseHRF(design, data, TR, hrf, polynomials)
+# where you can optimize the HRF
+polynomials = [make_poly_matrix(y.shape[-1], np.arange(5)) for y in data]
+polynomials = [make_project_matrix(p) for p in polynomials]
+# It makes more sense to me if this function only returns the optimized hrf and
+# maybe maybe the convolved DM.
+convolved_design, optimized_hrf = optimiseHRF(design, data, TR, hrf, polynomials)
+
+# compare new and old hrf
+plt.plot(optimized_hrf, label='New')
+plt.plot(hrf, label='Old')
+plt.legend()
+plt.show()
 
 
 """
@@ -66,7 +74,7 @@ Run GLMdenoise
 """
 
 import time 
-gd = PYG.GLMdenoise(design, data, tr=0.764, n_jobs=1)
+gd = PYG.GLMdenoise(convolved_design, data, tr=0.764, n_jobs=1)
 start = time.time()
 gd.fit()
 print(f'Fit took {format_time(time.time()-start)}!')

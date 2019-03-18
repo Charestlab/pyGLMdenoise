@@ -283,7 +283,7 @@ def optimiseHRF(
     data,
     tr,
     hrfknobs, # should be called hrf_seed
-    combinedmatrix, # this is a polynomial matrix... not combined?
+    polynomials, # this is a polynomial matrix... not combined?
     numforhrf=50, # n_hrf_voxels is better 
     hrfthresh=0.5, # hrf_threshold
     hrffitmask=1, # just mask, I guess
@@ -310,7 +310,7 @@ def optimiseHRF(
                 Note on normalization: after fitting the HRF, we
                 normalize the HRF to peak at 1 (and adjust amplitudes
                 accordingly).
-        combinedmatrix (stack of 2d arrays): projection matrix of the
+        polynomials (stack of 2d arrays): projection matrix of the
                 polynomials and extra regressors (if passed by user).
                 This is used to whiten the design matrix.
         numforhrf (int, optional): Defaults to 50.
@@ -350,10 +350,12 @@ def optimiseHRF(
     # reduce data
     data = [d[:, mean_mask].astype(np.float16) for d in data]
 
+    # project out polynomials
+    data = [p @ d for p, d in zip(polynomials, data)]
+
     # collect ntimes per run
     ntimes = []
     
-
     for p in range(numruns):
         ntimes.append(data[p].shape[0])
 
@@ -376,7 +378,7 @@ def optimiseHRF(
                 convdes = make_design(events[p], tr, ntimes[p], currenthrf)
 
                 # project the polynomials out
-                convdes = np.dot(combinedmatrix[p], convdes)
+                convdes = np.dot(polynomials[p], convdes)
                 # time x conditions
 
                 convdesign.append(convdes)
@@ -440,7 +442,7 @@ def optimiseHRF(
                 convdes = convdes.reshape(
                     (ntimes[p], -1), order='F')
                 # time x L*voxels
-                convdes = np.array(np.dot(combinedmatrix[p], convdes))
+                convdes = np.array(np.dot(polynomials[p], convdes))
                 # time x voxels x L
                 convdes = convdes.reshape((ntimes[p], numinhrf, -1), order='F')
                 convdesign.append(
