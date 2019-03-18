@@ -1,64 +1,6 @@
 import numpy as np
+from glmdenoise.utils.make_design_matrix import make_design
 from scipy.interpolate import pchip
-
-
-def crossval(whitedesign, whitedata, design, data, polynomials, verbose=None):
-    """ cross-validated R2
-
-    Args:
-        design ([type]): whitened design
-        data ([type]): whitened data
-        polynomials ([type]): whitening matrix
-        verbose ([type], optional): Defaults to None. keep quiet.
-
-    Returns:
-        f (dict): dictionary of results with keys:
-            ["R2"]: cross-validated R2
-            ["R2run"]: R2 for each run
-    """
-    from itertools import compress
-
-    numruns = len(design)
-    betas = []
-    whitemodelfit = []
-    R2run = []
-    if verbose is not None:
-        print('cross-validating model')
-    for p in range(numruns):
-        mask = np.arange(numruns) != p
-
-        # stack the training design matrices
-        # here, we use the combinedmatrix @ design
-        stackdesign = np.vstack(list(compress(whitedesign, mask)))
-
-        # get the training betas # note kendrick uses data2
-        # (whitened with combinedmatrix) for betas
-        betas.append(mtimesStack(olsmatrix(
-            stackdesign), list(compress(whitedata, mask))))
-
-        # get the predicted responses
-        # here we apply the betas from the training
-        # set to the left out design (non-whitened)
-        modelfit = design[p] @ betas[p]
-
-        # remove polynomials from the cross-val modelfits
-        # (note: we use polynomials here, not combinexmatrix)
-        whitemodelfit.append(polynomials[p] @ modelfit)
-
-        # calculate run-wise R2 using the cross-val modelfits
-        # this data has been whitened by the polynomials, not the
-        # combinedmatrix
-        R2run.append(calccodStack(data[p], whitemodelfit[p]))
-
-    # calculate overall R2
-    R2 = calccodStack(data, whitemodelfit)
-
-    # prepare output
-    f = dict()
-    f['R2'] = R2
-    f['R2run'] = R2run
-
-    return f
 
 
 def constructStimulusMatrices(m, prenumlag=0, postnumlag=0, wantwrap=0):
@@ -271,83 +213,6 @@ def calccodStack(y, yhat):
     return f
 
 
-def linspacefixeddiff(x, d, n):
-    """
-    f = linspacefixeddiff(x, d, n)
-
-    Args:
-        x ([int]): < x > is a number
-        d ([int]): < d > is difference between successive numbers
-        n ([type]): < n > is the number of desired points(positive integer)
-
-    Returns:
-        a vector of equally spaced values starting at < x > .
-
-    Example:
-        assert(linspacefixeddiff(0, 2, 5)==[0, 2, 4, 6, 8])
-    """
-    x2 = x+d*(n-1)
-    return np.linspace(x, x2, n)
-
-
-def make_design(events, tr, ntimes, hrf=None):
-    """generate either a blip design or one convolved with an hrf
-
-    Args:
-        events ([type]): [description]
-        tr ([type]): [description]
-        ntimes ([type]): [description]
-        hrf ([type], optional): Defaults to None. [description]
-
-    Returns:
-        [type]: [description]
-    """
-
-    # loop over conditions
-    conditions = list(set(events.trial_type))
-    nconditions = len(set(events['trial_type'].values))
-
-    dm = np.zeros((ntimes, nconditions))
-
-    if hrf is None:
-
-        for i, q in enumerate(conditions):
-
-            # onset times for qth condition in run p
-            otimes = np.array(
-                events.loc[events['trial_type'] == q, 'onset'].values/tr).astype(int)
-            yvals = np.zeros((ntimes))
-            for r in otimes:
-                yvals[r] = 1
-            dm[:, i] = yvals
-
-    else:
-        # calc
-        alltimes = linspacefixeddiff(0, tr, ntimes)
-        hrftimes = linspacefixeddiff(0, tr, len(hrf))
-
-        for i, q in enumerate(conditions):
-
-            # onset times for qth condition in run p
-            otimes = events.loc[events['trial_type'] == q, 'onset'].values
-
-            # intialize
-            yvals = np.zeros((ntimes))
-
-            # loop over onset times
-            for r in otimes:
-                # interpolate to find values at the data sampling time points
-                sampler = alltimes
-                f = pchip(r + hrftimes, hrf, extrapolate=False)(sampler)
-                f[np.isnan(f)] = 0
-                yvals = yvals + f
-
-            # record
-            dm[:, i] = yvals
-
-    return dm
-
-
 def mtimesStack(m1, m2):
     """function f = mtimesStack(m1,m2)
 
@@ -517,27 +382,12 @@ def optimiseHRF(
     numruns = len(design)
 
     postnumlag = numinhrf - 1
-    # precompute for speed
-    convdesignpre = []
 
     # collect ntimes per run
     ntimes = []
 
     for p in range(numruns):
         ntimes.append(data[p].shape[0])
-        events = design[p]
-        # construct design matrix
-        X = make_design(events, tr, ntimes[p])
-
-        # expand design matrix using delta functions
-        numcond = X.shape[1]
-        # time x L*conditions
-        stimmat = constructStimulusMatrices(
-            X.T, prenumlag=0, postnumlag=postnumlag
-        )
-
-        # time*L x conditions
-        convdesignpre.append(stimmat.reshape(-1, numcond, order='F'))
 
     # loop until convergence
     currenthrf = hrfknobs  # initialize
@@ -570,7 +420,7 @@ def optimiseHRF(
             currentbeta = mtimesStack(olsmatrix(stackdesign), data)
 
             # calculate R^2
-            modelfit = [np.dot(convdesign[p], currentbeta)
+            modelfit = [np.dot(convdesign[p], currentbeta).astype(np.float32)
                         for p in range(numruns)]
 
             R2 = calccodStack(data, modelfit)
@@ -601,12 +451,21 @@ def optimiseHRF(
             convdesign = []
             for p in range(numruns):
 
+                X = make_design(design[p], tr, ntimes[p])
+
+                # expand design matrix using delta functions
+                numcond = X.shape[1]
+                # time x L*conditions
+                stimmat = constructStimulusMatrices(
+                    X.T, prenumlag=0, postnumlag=postnumlag
+                ).reshape(-1, numcond, order='F').astype(np.float32)
+
                 # calc
                 # weight and sum based on the current amplitude estimates.
                 # only include the good voxels.
                 # return shape time*L x voxels
                 convdes = np.dot(
-                    convdesignpre[p], currentbeta[:, hrffitvoxels])
+                    stimmat, currentbeta[:, hrffitvoxels]).astype(np.float32)
 
                 # remove polynomials and extra regressors
                 # time x L*voxels

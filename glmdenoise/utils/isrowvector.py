@@ -23,4 +23,8 @@ def isrowvector(m):
     if not isinstance(m, np.ndarray):
         m = np.asarray(m)
     f = m.shape[0] == 1
+<<<<<<< HEAD
     return f
+=======
+    return f
+>>>>>>> master

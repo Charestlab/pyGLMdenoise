@@ -12,8 +12,8 @@ f = normalisemax(m,dim)
  (normalisemax([[1, 2, 3]])==[[1/3, 2/3, 1]]).all()
 """
 import numpy as np
-from utils.choose import choose as ch
-from utils.isrowvector import isrowvector as isr
+from glmdenoise.utils.choose import choose as ch
+from glmdenoise.utils.isrowvector import isrowvector as isr
 
 
 def normalisemax(m, dim=None):
