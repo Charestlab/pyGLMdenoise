@@ -21,6 +21,24 @@ def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
 
 
 def run_bids(bids, sub_num=None, sub=None, task=None, ses=None):
+    """Recursively run GLMdenoise on subjects, tasks, sessions
+
+    This uses a bids object that is able to find data in the BIDS
+    directory it represents.
+    See `run_bids_directory` to call this with a directory path.
+    
+    Args:
+        bids (glmdenoise.io.bids.BidsDirectory): Wrapper for pybids
+        sub_num (int, optional): Number of one subject to run. 
+            Defaults to None.
+        sub (str, optional): BIDS identifier of one subject to run. 
+            Defaults to None. 
+        task (str, optional): Name of specific task to run. 
+            Defaults to None. 
+        ses (str, optional): Session identifier to run.
+            Defaults to None. 
+    
+    """
     if sub and task and ses:
         bold_files = bids.get_filepaths_bold_runs(sub, task, ses)
         if not bold_files:
