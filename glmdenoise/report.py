@@ -138,8 +138,4 @@ class Report(object):
             ax.scatter(x[subset], y[subset])
         ax.set(xlabel=xlabel, ylabel=ylabel)
         fig.savefig(self.filepath_for(title))
-<<<<<<< HEAD
         self.add_image(title)
-=======
-        self.add_image(title)
->>>>>>> master
