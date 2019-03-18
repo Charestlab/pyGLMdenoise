@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
+from glmdenoise.utils.make_image_stack import make_image_stack
 from itertools import compress
 from scipy.io import loadmat
 from tqdm import tqdm
@@ -56,8 +57,6 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
 
     return whitened_data, whitened_design
 
-from numba import autojit, prange
-@autojit
 def fit_runs(data, design):
     """Fits a least square of combined runs. 
        The matrix addition is equivalent to concatenating the list of data and the list of
@@ -77,11 +76,11 @@ def fit_runs(data, design):
     betas = 0
     start_col = 0
 
-    for run in prange(len(data)):
-        n_vols = data[run].shape[0]
+    for run in data:
+        n_vols = run.shape[0]
         these_cols = np.arange(n_vols) + start_col
-        betas += X[:, these_cols] @ data[run]
-        start_col += data[run].shape[0]
+        betas += X[:, these_cols] @ run
+        start_col += run.shape[0]
 
     return betas
 
@@ -102,7 +101,7 @@ def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5))
 
 
     whitened_data, whitened_design = whiten_data(
-                   data,design, extra_regressors,poly_degs)
+                   data,design, extra_regressors, poly_degs)
 
     n_runs = len(data)
     nom_denom = []
@@ -147,8 +146,8 @@ class GLMdenoise():
         """[summary]
         
         Arguments:
-            design {[type]} -- [description]
-            data {[type]} -- [description]
+            design {list} -- list of design matrices. Each design matrix is a numpy array of size Time x Predictors
+            data {list} -- list of runs. Each run is a numpy array of size X x Y x Z x Time
         
         Keyword Arguments:
             tr {float} -- TR in seconds (default: {2})
@@ -157,24 +156,26 @@ class GLMdenoise():
             n_boots {int} -- [description] (default: {100})
         """
 
-        
+               
         self.design = design
-        self.data = data
+        self.dims = data[0].shape
         self.tr = tr
         self.n_pcs = n_pcs
-        self.dims = data[0].shape
         self.n_jobs = n_jobs
         self.n_boots = n_boots
         self.n_runs = len(data)
         self.xval = []
         self.PCA_R2s = []
         # calculate polynomial degrees
-        max_poly_deg = int(((data[0].shape[0] * tr) / 60) // 2) + 1
+        max_poly_deg = int(((self.dims[-1] * tr) / 60) // 2) + 1
         self.poly_degs = np.arange(max_poly_deg)
 
-        self.mean_image = np.vstack(data).mean(0)
+        # reshape data to Time X Voxels
+        self.data = [np.moveaxis(y, -1, 0) for y in data]
+        self.data = [y.reshape((y.shape[0], -1)) for y in self.data]
+        # Get mean image and mean image mask
+        self.mean_image = np.vstack(self.data).mean(0)
         self.mean_mask = self.mean_image > np.percentile(self.mean_image, 99) / 2
-
         # reduce data
         self.data = [d[:, self.mean_mask].astype(np.float16) for d in self.data]
 
@@ -182,14 +183,14 @@ class GLMdenoise():
     def fit(self):
         """
         """
-        print('Making initial fit')
+        print('Making initial fit') #info
         r2s_initial= cross_validate(self.data, self.design, poly_degs=self.poly_degs)
         print('Done!')
 
-        print('Getting noise pool')
+        print('Getting noise pool') #info
         self.noise_pool_mask = (r2s_initial < 0)
 
-        print('Calculating PCs...')
+        print('Calculating PCs...') #info
         run_PCAs = []
         for run in self.data:
             noise_pool = run[:, self.noise_pool_mask]
@@ -210,7 +211,7 @@ class GLMdenoise():
             self.pc_regressors.append([pc[:, :n_pc] for pc in run_PCAs])
         print('Done!')
 
-        print('Fit data with PCs...')
+        print('Fit data with PCs...') #info
         self.PCA_R2s =  Parallel(n_jobs=self.n_jobs, backend='threading')(
                     delayed(cross_validate)(self.data, self.design,
                         self.pc_regressors[x], self.poly_degs) for x in tqdm(
@@ -230,7 +231,7 @@ class GLMdenoise():
                         self.pc_regressors[self.select_pca], 
                         self.poly_degs)
 
-        print('Bootstrapping betas...')
+        print('Bootstrapping betas...') #info
         n_runs = len(self.data)
         boot_betas = []
 
@@ -247,7 +248,7 @@ class GLMdenoise():
                             range(self.n_boots), desc='Bootstrapping'))
         print('Done!')
 
-        print('Calculating standard error and final fit')
+        print('Calculating standard error and final fit') #info
         boot_betas = np.array(boot_betas)
         self.final_fit = np.median(boot_betas, 0)
         n_conds = boot_betas.shape[1]
@@ -261,7 +262,18 @@ class GLMdenoise():
             self.pseudo_t_stats = np.apply_along_axis(lambda x: x/self.poolse, 1, self.final_fit)
         print('Done')
 
+        # Since we are only using "brain" voxel, we need refactor these into the original size brain
+
     def plot_figures(self):
+        # plot R2 per PCn and the selected PCn
         plt.plot(self.xval)
         plt.plot(self.select_pca, self.xval[self.select_pca], "o")
+        plt.show()
+
+        # plot pseudo T statistics
+        brain = np.zeros(len(self.mean_mask))
+        brain[self.mean_mask] = self.pseudo_t_stats.mean(0)
+        brain = brain.reshape(*self.dims[:-1])
+
+        plt.imshow(make_image_stack(brain))
         plt.show()

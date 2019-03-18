@@ -24,12 +24,12 @@ def make_design(events, tr, n_times, hrf=None):
 
     if hrf is None:
         for i, q in enumerate(conditions):
-
             # onset times for qth condition in run p
-            otimes = events[events['trial_type'] == q]['onset'].values//tr
+            onset_times = events[events['trial_type'] == q]['onset'].values//tr
             yvals = np.zeros((n_times))
-            for r in otimes:
-                yvals[r] = 1
+            for r in onset_times:
+                if not r > len(yvals)-1:
+                    yvals[int(r)] = 1
             dm[:, i] = yvals
 
     else:
@@ -39,13 +39,13 @@ def make_design(events, tr, n_times, hrf=None):
 
         for i, q in enumerate(conditions):
             # onset times for qth condition in run p
-            otimes = events[events['trial_type'] == q]['onset'].values
+            onset_times = events[events['trial_type'] == q]['onset'].values
 
             # intialize
             yvals = np.zeros((n_times))
 
             # loop over onset times
-            for r in otimes:
+            for r in onset_times:
                 # interpolate to find values at the data sampling time points
                 f = pchip(r + hrf_times, hrf, extrapolate=False)(all_times)
                 yvals = yvals + np.nan_to_num(f)
