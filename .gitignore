@@ -1,6 +1,10 @@
 #
 .vscode/
 
+
+# data folder
+data/
+
 # various output
 figures/
 report.html
