@@ -36,26 +36,17 @@ def run_bids(bids, sub_num=None, sub=None, task=None, ses=None):
         task (str, optional): Name of specific task to run. 
             Defaults to None. 
         ses (str, optional): Session identifier to run.
-            Defaults to None. 
+            Defaults to None, meaning run all sessions one by one 
     
     """
     if sub and task and ses:
-        bold_files = bids.get_filepaths_bold_runs(sub, task, ses)
-        if not bold_files:
-            msg = 'No preprocessed runs found for subject {} task {} session {}'
-            print(msg.format(sub, task, ses))
-            return
-        event_files = bids.get_filepaths_event_runs(sub, task, ses)
-        metas = bids.get_metas_bold_runs(sub, task, ses)
-        key = 'RepetitionTime'
-        trs = [meta[key] for meta in metas if key in meta]
-        assert trs, 'RepetitionTime not specified in metadata'
-        assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
-        return run_files(bold_files, event_files, tr=trs[0])
+        return run_bids_subset(bids, sub, task, ses)
     elif sub and task:
         sessions = bids.get_sessions_for_task_and_subject(task, sub)
         for ses in sessions:
             run_bids(bids, sub=sub, task=task, ses=ses)
+        if sessions == []:
+            run_bids_subset(bids, sub, task)
     elif sub:
         tasks = bids.get_tasks_for_subject(sub)
         for task in tasks:
@@ -68,3 +59,31 @@ def run_bids(bids, sub_num=None, sub=None, task=None, ses=None):
         subs = bids.get_preprocessed_subjects_ids()
         for sub in subs:
             run_bids(bids, sub=sub)
+
+def run_bids_subset(bids, sub, task, ses=None):
+    """Run GLMdenoise on a subset of files in a BIDS dir defined by the args
+
+    This uses a bids object that is able to find data in the BIDS
+    directory it represents.
+    See `run_bids_directory` to call this with a directory path.
+    
+    Args:
+        bids (glmdenoise.io.bids.BidsDirectory): Wrapper for pybids
+        sub (str): BIDS identifier of one subject to run. 
+        task (str): Name of specific task to run. 
+        ses (str, optional): Session identifier to run.
+            Defaults to None, meaning there are no sessions. 
+    
+    """
+    bold_files = bids.get_filepaths_bold_runs(sub, task, ses)
+    if not bold_files:
+        msg = 'No preprocessed runs found for subject {} task {} session {}'
+        print(msg.format(sub, task, ses))
+        return
+    event_files = bids.get_filepaths_event_runs(sub, task, ses)
+    metas = bids.get_metas_bold_runs(sub, task, ses)
+    key = 'RepetitionTime'
+    trs = [meta[key] for meta in metas if key in meta]
+    assert trs, 'RepetitionTime not specified in metadata'
+    assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
+    return run_files(bold_files, event_files, tr=trs[0])
