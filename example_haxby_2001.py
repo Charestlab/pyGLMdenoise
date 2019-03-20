@@ -5,6 +5,8 @@ Simple example script on the OpenNeuro Haxby 2001 dataset
 requires awscli: `apt install awscli`
 """
 import os
+import json
+from time import sleep
 
 data_uris = {
     '': 's3://openneuro.org/ds000105',
@@ -18,5 +20,21 @@ if not os.path.isdir(dataset_dir):
         cmd = 'aws --no-sign-request s3 sync {} data/ds000105{}'.format(uri, folder)
         print('downloading {}..'.format(folder))
         os.system(cmd)
+
+    ## adapt dataset description to mention fmriprep
+    sleep(0.1)
+    desc_file_path = os.path.join(dataset_dir, 'dataset_description.json')
+    with open(desc_file_path) as fh:
+        desc = json.load(fh)
+    desc["PipelineDescription"] = {"Name": "fmriprep"}
+    sleep(0.1)
+    with open(desc_file_path, 'w') as fh:
+        json.dump(desc, fh)
+    sleep(0.1)
 else:
     print('found data.')
+
+
+## run pyGLMdenoise on our BIDS dataset:
+from glmdenoise import run_bids_directory
+run_bids_directory(dataset_dir)
