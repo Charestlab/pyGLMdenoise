@@ -1,4 +1,5 @@
 from bids import BIDSLayout
+import re
 
 
 class BidsDirectory(object):
@@ -6,7 +7,11 @@ class BidsDirectory(object):
     """
 
     def __init__(self, directory):
-        self.layout = BIDSLayout(directory, derivatives=True)
+        ## variant was replaced by desc in the spec
+        ## but our example dataset has not been updated
+        self.layout = BIDSLayout(directory, derivatives=True, ignore=[
+            re.compile('_variant-')
+        ])
 
     def get_preprocessed_subjects_ids(self):
         return self.layout.get(return_type='id', target='subject')
@@ -27,22 +32,22 @@ class BidsDirectory(object):
         )
 
     def get_filepaths_bold_runs(self, subject, task, session):
-        return self.layout.get(
+        return sorted(self.layout.get(
             subject=subject,
             task=task,
             session=session,
             suffix='preproc',
             return_type='file'
-        )
+        ))
 
     def get_filepaths_event_runs(self, subject, task, session):
-        return self.layout.get(
+        return sorted(self.layout.get(
             subject=subject,
             task=task,
             session=session,
             suffix='events',
             return_type='file'
-        )
+        ))
 
     def get_metas_bold_runs(self, subject, task, session):
         runs = self.layout.get(
@@ -51,7 +56,7 @@ class BidsDirectory(object):
             session=session,
             suffix='bold'  # get metadata from raw!?
         )
-        return [r.metadata for r in runs]
+        return [r.metadata for r in sorted(runs, key=lambda b: b.filename)]
 
     def subject_id_from_number(self, sub_num):
         ids = self.layout.get(return_type='id', target='subject')
