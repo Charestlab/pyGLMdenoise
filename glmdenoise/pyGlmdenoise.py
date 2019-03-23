@@ -7,6 +7,7 @@ from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
 from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.report import Report
+from glmdenoise.defaults import default_params
 from itertools import compress
 from scipy.io import loadmat
 from tqdm import tqdm
@@ -86,7 +87,7 @@ def fit_runs(data, design):
 
     for run in prange(len(data)):
         n_vols = data[run].shape[0]
-        these_cols = np.arange(n_vols) + start_col
+        these_cols = np.arange(n_vols) + start_coldefault_params
         betas += X[:, these_cols] @ data[run]
         start_col += data[run].shape[0]
 
@@ -156,25 +157,33 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data, params, n_jobs=1, n_pcs=20, n_boots=100):
+    def __init__(self, design, data, tr, params=None):
         """[summary]
 
         Arguments:
             design {[type]} -- [description]
             data {[type]} -- [description]
+            tr {float} -- TR in seconds
 
         Keyword Arguments:
-            tr {float} -- TR in seconds (default: {2})
-            n_jobs {int} -- [description] (default: {10})
-            n_pcs {int} -- [description] (default: {20})
-            n_boots {int} -- [description] (default: {100})
+            params {dict} -- [description] (default: {10})
         """
+
+        params = params or dict()
+        for key, val in default_params.items():
+            params[key] = params.get(key) or default_params[key]
+
+        stimdur = numpy.median(design.duration.values)
+        params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
+        params['tr'] = tr
+        n_jobs = params['n_jobs']
+        n_pcs = params['n_pcs']
+        n_boots = params['n_boots']
 
         self.design = design
         self.data = data
         self.params = params
-        self.params['n_pcs'] = n_pcs
-        self.tr = params['tr']
+        self.tr = tr
         self.extra_regressors = params['extra_regressors']
         self.n_pcs = n_pcs
         self.dims = data[0].shape
@@ -296,7 +305,7 @@ class GLMdenoise():
         select_pca = select_noise_regressors(
             np.asarray(self.results['xval']))
         self.results['select_pca'] = select_pca
-        print(f'Selected {select_pca} number of PCs')
+        print('Selected {} number of PCs'.format(select_pca))
 
         print('Bootstrapping betas (No Denoising).')
         n_runs = len(self.data)
