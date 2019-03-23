@@ -393,7 +393,7 @@ def optimiseHRF(
     currenthrf = hrfknobs  # initialize
     cnt = 1
     while True:
-        print(f'\t optimising hrf :{cnt}\n')
+        print('\t optimising hrf :{}\n'.format(cnt))
 
         # fix the HRF, estimate the amplitudes
         if cnt % 2 == 1:
@@ -497,7 +497,7 @@ def optimiseHRF(
             # if HRF is all zeros (this can happen when the data are all zeros)
             # get out prematurely
             if np.all(currenthrf == 0):
-                print(f'current hrf went all to 0 after {cnt} attempts\n')
+                print('current hrf went all to 0 after {} attempts\n'.format(cnt))
                 break
 
             # check for convergence

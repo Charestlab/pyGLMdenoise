@@ -54,7 +54,7 @@ params['hrfmodel'] = 'optimise'  # 'assume'
 params['extra_regressors'] = False
 
 for i, (run, event) in enumerate(zip(runs, eventfs)):
-    print(f'run {i}')
+    print('run {}'.format(i))
     y = nib.load(run).get_data().astype(np.float32)
     dims = y.shape
     y = np.moveaxis(y, -1, 0)
@@ -82,6 +82,7 @@ for i, (run, event) in enumerate(zip(runs, eventfs)):
 gd = PYG.GLMdenoise(design, data, params, n_jobs=2)
 start = time.time()
 gd.fit()
-print(f'Fit took {format_time(time.time()-start)}!')
+fit_dur = format_time(time.time()-start)
+print('Fit took {}!'.format(fit_dur)
 
 gd.plot_figures()
