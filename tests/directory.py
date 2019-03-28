@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 import numpy
 
 
-class IOTest(TestCase):
+class DirectoryTests(TestCase):
 
     def test_run_bids(self):
         from glmdenoise.io.directory import run_bids

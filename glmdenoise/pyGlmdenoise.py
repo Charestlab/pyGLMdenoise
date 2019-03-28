@@ -1,5 +1,6 @@
 from numba import autojit, prange
 import numpy as np
+import numpy
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -173,7 +174,7 @@ class GLMdenoise():
         for key, val in default_params.items():
             params[key] = params.get(key) or default_params[key]
 
-        stimdur = numpy.median(design.duration.values)
+        stimdur = numpy.median(design[0].duration.values)
         params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
         params['tr'] = tr
         n_jobs = params['n_jobs']
@@ -385,9 +386,9 @@ class GLMdenoise():
         """
         print('Done')
 
-    def plot_figures(self):
+    def plot_figures(self, report=None):
         # start a new report with figures
-        report = Report()
+        report = report or Report()
         report.spatialdims = self.params['xyzsize']
 
         # plot solutions
