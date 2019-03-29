@@ -5,7 +5,7 @@ import nibabel
 import pandas
 
 
-def run_files(bold_files, event_files, tr, bids=None):
+def run_files(bold_files, event_files, tr, out=None):
     """Run glmdenoise on the provided image and event files
 
     Args:
@@ -16,13 +16,15 @@ def run_files(bold_files, event_files, tr, bids=None):
 
     msg = 'need same number of image and event files'
     assert len(bold_files) == len(event_files), msg
-    output = Output(bold_files[0], bids)
+    if out is None:
+        out = Output()
+        out.determine_location(sample_file=bold_files[0])
     data = [nibabel.load(f).get_data() for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
     gd = GLMdenoise(design, data, tr)
     gd.fit()
-    gd.plot_figures(output.create_report())
+    gd.plot_figures(out.create_report())
     for image_name in ['pseudo_t_stats']:
-        output.save_image(gd.results.get(image_name), image_name)
+        out.save_image(gd.results.get(image_name), image_name)
     for var_name in ['xval']:
-        output.save_variable(gd.results.get(var_name), var_name)
+        out.save_variable(gd.results.get(var_name), var_name)
