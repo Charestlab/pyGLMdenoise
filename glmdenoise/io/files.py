@@ -22,3 +22,7 @@ def run_files(bold_files, event_files, tr, bids=None):
     gd = GLMdenoise(design, data, tr)
     gd.fit()
     gd.plot_figures(output.create_report())
+    for image_name in ['pseudo_t_stats']:
+        output.save_image(gd.results.get(image_name), image_name)
+    for var_name in ['xval']:
+        output.save_variable(gd.results.get(var_name), var_name)
