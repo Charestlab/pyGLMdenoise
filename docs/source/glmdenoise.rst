@@ -15,11 +15,10 @@ Submodules
 .. toctree::
 
    glmdenoise.console
-   glmdenoise.data
-   glmdenoise.makeimagestack
+   glmdenoise.defaults
+   glmdenoise.pyGlmdenoise
    glmdenoise.report
    glmdenoise.select_noise_regressors
-   glmdenoise.select_voxels_nr_selection
 
 Module contents
 ---------------
