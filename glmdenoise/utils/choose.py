@@ -8,10 +8,6 @@ function f = choose(flag,yes,no)
  <no> is something
 
  if <flag>, return <yes>.  otherwise, return <no>.
-<<<<<<< HEAD
-=======
-
->>>>>>> master
 """
 
 
