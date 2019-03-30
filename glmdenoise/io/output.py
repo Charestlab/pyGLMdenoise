@@ -1,4 +1,8 @@
 from glmdenoise.report import Report
+from os import mkdir
+import nibabel
+import numpy
+import os
 
 
 class Output(object):
@@ -7,7 +11,8 @@ class Output(object):
         pass
 
     def determine_location(self, sample_file):
-        pass
+        datadir = os.path.dirname(sample_file)
+        self.outdir = os.path.join(datadir, 'glmdenoise')
 
     def determine_location_in_bids(self, bids, sub, ses, task):
         pass
@@ -19,4 +24,10 @@ class Output(object):
         pass
 
     def save_variable(self, var, name):
-        pass
+        self.ensure_directory()
+        fpath = os.path.join(self.outdir, name + '.npy')
+        numpy.save(fpath, var)
+
+    def ensure_directory(self):
+        if not os.path.isdir(self.outdir):
+            mkdir(self.outdir)
