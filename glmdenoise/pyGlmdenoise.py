@@ -7,6 +7,8 @@ import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
 from glmdenoise.select_noise_regressors import select_noise_regressors
+from glmdenoise.utils.normalisemax import normalisemax
+from glmdenoise.utils.gethrf import getcanonicalhrf
 from glmdenoise.report import Report
 from glmdenoise.defaults import default_params
 from itertools import compress
@@ -171,7 +173,7 @@ class GLMdenoise():
         """
 
         params = params or dict()
-        for key, val in default_params.items():
+        for key, _ in default_params.items():
             params[key] = params.get(key) or default_params[key]
 
         stimdur = numpy.median(design[0].duration.values)

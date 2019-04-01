@@ -65,3 +65,8 @@ class BidsDirectory(object):
             candidate = str(sub_num).zfill(nzeros)
             if candidate in ids:
                 return candidate
+
+    def match_run_files(self, bold_files, evnt_files):
+        get_runs = self.layout.parse_file_entities
+        runs_bold = [get_runs(f)['run'] for f in bold_files]
+        runs_evnt = [get_runs(f)['run'] for f in evnt_files]

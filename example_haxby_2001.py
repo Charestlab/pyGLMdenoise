@@ -28,7 +28,9 @@ if not os.path.isdir(dataset_dir):
         desc = json.load(fh)
     desc["PipelineDescription"] = {"Name": "fmriprep"}
     sleep(0.1)
-    with open(desc_file_path, 'w') as fh:
+    fmriprep_desc_fpath = os.path.join(
+        dataset_dir, 'derivatives', 'fmriprep', 'dataset_description.json')
+    with open(fmriprep_desc_fpath, 'w') as fh:
         json.dump(desc, fh)
     sleep(0.1)
 else:
