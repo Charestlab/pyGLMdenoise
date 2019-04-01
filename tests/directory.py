@@ -105,7 +105,7 @@ class DirectoryTests(TestCase):
                 tr=2.2,
                 out=out
             )
-            out.determine_location_in_bids.assert_called_with(
+            out.fit_bids_context.assert_called_with(
                 bids,
                 sub='01',
                 task='a',

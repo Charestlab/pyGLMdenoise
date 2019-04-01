@@ -18,7 +18,7 @@ def run_files(bold_files, event_files, tr, out=None):
     assert len(bold_files) == len(event_files), msg
     if out is None:
         out = Output()
-        out.determine_location(sample_file=bold_files[0])
+        out.configure_from(sample_file=bold_files[0])
     data = [nibabel.load(f).get_data() for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
     gd = GLMdenoise(design, data, tr)

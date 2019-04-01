@@ -13,7 +13,7 @@ class Output(object):
         self.bids = None
         self.outdir = 'glmdenoise'
 
-    def determine_location(self, sample_file):
+    def configure_from(self, sample_file):
         """Supply one input file to initialize output
         
         Args:
@@ -26,7 +26,7 @@ class Output(object):
             # still default, update
             self.outdir = os.path.join(datadir, 'glmdenoise')
 
-    def determine_location_in_bids(self, bids, sub, ses, task):
+    def fit_bids_context(self, bids, sub, ses, task):
         """Provide BIDS context including subject, session and task
         
         Args:

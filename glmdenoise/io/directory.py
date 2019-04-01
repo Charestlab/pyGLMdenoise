@@ -88,5 +88,5 @@ def run_bids_subset(bids, sub, task, ses=None):
     assert trs, 'RepetitionTime not specified in metadata'
     assert len(set(trs)) == 1, 'RepetitionTime varies across runs'
     out = Output()
-    out.determine_location_in_bids(bids, sub=sub, task=task, ses=ses)
+    out.fit_bids_context(bids, sub=sub, task=task, ses=ses)
     return run_files(bold_files, event_files, tr=trs[0], out=out)

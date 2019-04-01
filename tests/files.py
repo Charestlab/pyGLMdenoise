@@ -16,7 +16,7 @@ class FilesTests(TestCase):
         bids = Mock()
         data1, design1 = Mock(), Mock()
         run_files([data1], [design1], 1.0)
-        out.determine_location.assert_called_with(sample_file=data1)
+        out.configure_from.assert_called_with(sample_file=data1)
 
     @patch('glmdenoise.io.files.nibabel')
     @patch('glmdenoise.io.files.pandas')
