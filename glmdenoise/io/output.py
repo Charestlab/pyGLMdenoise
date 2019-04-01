@@ -10,7 +10,7 @@ class Output(object):
     """
 
     def __init__(self):
-        pass
+        self.bids = None
 
     def determine_location(self, sample_file):
         """Supply one input file to initialize output
@@ -24,6 +24,12 @@ class Output(object):
 
     def determine_location_in_bids(self, bids, sub, ses, task):
         pass
+
+    def file_path(self, tag, ext):
+        if self.bids:
+            return ''
+        else:
+            return os.path.join(self.outdir, tag + '.' + ext)
 
     def create_report(self):
         return Report()
@@ -39,8 +45,7 @@ class Output(object):
             name (str): The name of the variable
         """
         self.ensure_directory()
-        fpath = os.path.join(self.outdir, name + '.npy')
-        numpy.save(fpath, var)
+        numpy.save(self.file_path(name, 'npy'), var)
 
     def ensure_directory(self):
         """Make sure that the output directory exist.

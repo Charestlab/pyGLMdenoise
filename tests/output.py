@@ -20,3 +20,13 @@ class OutputTests(TestCase):
             '/home/johndoe/data/myproject/glmdenoise/foo.npy',
             11
         )
+
+    def test_file_path(self):
+        from glmdenoise.io.output import Output
+        output = Output()
+        filepath='/home/johndoe/data/myproject/run_1.nii'
+        output.determine_location(sample_file=filepath)
+        self.assertEquals(
+            output.file_path('bar', 'xyz'),
+            '/home/johndoe/data/myproject/glmdenoise/bar.xyz'
+        )
