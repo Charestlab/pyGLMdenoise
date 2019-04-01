@@ -23,11 +23,11 @@ def make_design(events, tr, n_times, hrf=None):
     dm = np.zeros((n_times, n_conditions))
 
     if hrf is None:
-        for i, q in enumerate(conditions):
+        for i, cond in enumerate(conditions):
 
             # onset times for qth condition in run p
             otimes = np.array(
-                events[events['trial_type'] == q]['onset'].values//tr).astype(int)
+                events[events['trial_type'] == cond]['onset'].values//tr).astype(int)
             yvals = np.zeros((n_times))
             for r in otimes:
                 yvals[r] = 1
@@ -38,9 +38,9 @@ def make_design(events, tr, n_times, hrf=None):
         all_times = np.linspace(0, tr*(n_times-1), n_times)
         hrf_times = np.linspace(0, tr*(len(hrf)-1), len(hrf))
 
-        for i, q in enumerate(conditions):
+        for i, cond in enumerate(conditions):
             # onset times for qth condition in run p
-            otimes = events[events['trial_type'] == q]['onset'].values
+            otimes = events[events['trial_type'] == cond]['onset'].values
 
             # intialize
             yvals = np.zeros((n_times))
