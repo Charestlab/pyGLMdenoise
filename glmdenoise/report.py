@@ -1,5 +1,5 @@
 from glmdenoise.utils.make_image_stack import make_image_stack
-from glmdenoise.io.output import Output
+import glmdenoise.io.output
 from matplotlib import pyplot as plt
 from ww import f
 from os.path import join
@@ -14,7 +14,7 @@ class Report(object):
     def __init__(self):
         self.blocks = []
         self.toc = []
-        self.output = Output()
+        self.output = glmdenoise.io.output.Output()
 
     def use_output(self, output):
         self.output = output

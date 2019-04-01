@@ -1,4 +1,4 @@
-from glmdenoise.report import Report
+import glmdenoise
 from os import mkdir
 import nibabel
 import numpy
@@ -91,7 +91,7 @@ class Output(object):
             glmdenoise.report: Report object with methods to create figures
         """
 
-        report = Report()
+        report = glmdenoise.report.Report()
         report.use_output(self)
         return report
 
