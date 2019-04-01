@@ -43,6 +43,26 @@ class Output(object):
         subdir = os.path.join('derivatives', 'glmdenoise', subdir, sesdir)
         self.outdir = os.path.join(bids.root, subdir)
 
+    def ensure_directory(self):
+        """Make sure that the output directory exist.
+
+        Tries to create the output directory if it isn't there yet.
+        """
+        if not os.path.isdir(self.outdir):
+            mkdir(self.outdir)
+
+    def safe_name(self, name):
+        """Remove spaces etc so it can be used as html identifier
+        
+        Args:
+            name (str): Title or name
+        
+        Returns:
+            str: name without special characters
+        """
+
+        return name.replace(' ', '_')
+
     def file_path(self, tag, ext):
         """Obtain output file path for the given variable name and extension
         
@@ -65,7 +85,15 @@ class Output(object):
             return os.path.join(self.outdir, tag + '.' + ext)
 
     def create_report(self):
-        return Report()
+        """Return a Report object configured to use this Output object
+        
+        Returns:
+            glmdenoise.report: Report object with methods to create figures
+        """
+
+        report = Report()
+        report.use_output(self)
+        return report
 
     def save_image(self, imageArray, name):
         """Store brain image data in a nifti file using nibabel
@@ -91,10 +119,29 @@ class Output(object):
         self.ensure_directory()
         numpy.save(self.file_path(name, 'npy'), var)
 
-    def ensure_directory(self):
-        """Make sure that the output directory exist.
-
-        Tries to create the output directory if it isn't there yet.
+    def save_text(self, text, name, ext):
+        """Store text file
+        
+        Args:
+            text (str): string content
+            name (str): filename
+            ext (str): file extension
         """
-        if not os.path.isdir(self.outdir):
-            mkdir(self.outdir)
+
+        with open(self.file_path(name, ext), 'w') as text_file:
+            text_file.write(text)
+
+    def save_figure(self, figure, name):
+        """Save the figure object as a png file
+        
+        Args:
+            figure (matplotlib.figure.Figure): Figure object
+            name (str): name of the plot
+        
+        Returns:
+            str: absolute filepath to new png file
+        """
+
+        fpath = self.file_path(name, 'png')
+        figure.save_figure(fpath)
+        return fpath
