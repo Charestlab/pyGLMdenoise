@@ -18,7 +18,7 @@ class DirectoryTests(TestCase):
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids)
-            self.assertEquals(run_files.call_count, 3)
+            self.assertEqual(run_files.call_count, 3)
             run_files.assert_any_call(
                 ('bld', '01', 'a', '1'), ('evt', '01', 'a', '1'), tr=2.2, out=Output())
             run_files.assert_any_call(
@@ -39,7 +39,7 @@ class DirectoryTests(TestCase):
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub_num=1)
-            self.assertEquals(run_files.call_count, 2)
+            self.assertEqual(run_files.call_count, 2)
             run_files.assert_any_call(
                 ('bld', '01', 'a', '1'), ('evt', '01', 'a', '1'), tr=2.2, out=Output())
             run_files.assert_any_call(
@@ -55,7 +55,7 @@ class DirectoryTests(TestCase):
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
-            self.assertEquals(run_files.call_count, 1)
+            self.assertEqual(run_files.call_count, 1)
             run_files.assert_called_with(
                 ('bld', '01', 'a', '1'), ('evt', '01', 'a', '1'), tr=2.2, out=Output())
 
@@ -69,7 +69,7 @@ class DirectoryTests(TestCase):
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
-            self.assertEquals(run_files.call_count, 2)
+            self.assertEqual(run_files.call_count, 2)
             run_files.assert_any_call(
                 ('bld', '01', 'a', '1'), ('evt', '01', 'a', '1'), tr=2.2, out=Output())
             run_files.assert_any_call(
@@ -85,7 +85,7 @@ class DirectoryTests(TestCase):
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
-            self.assertEquals(run_files.call_count, 1)
+            self.assertEqual(run_files.call_count, 1)
             run_files.assert_any_call(
                 ('bld', '01', 'a', None), ('evt', '01', 'a', None), tr=2.2, out=Output())
 

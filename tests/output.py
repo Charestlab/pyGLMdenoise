@@ -17,12 +17,13 @@ class OutputTests(TestCase):
             '/home/johndoe/data/myproject/glmdenoise'
         )
 
-    def test_file_path_non_bids(self):
+    @patch('glmdenoise.io.output.nibabel')
+    def test_file_path_non_bids(self, nibabel):
         from glmdenoise.io.output import Output
         output = Output()
         filepath='/home/johndoe/data/myproject/run_1.nii'
         output.configure_from(sample_file=filepath)
-        self.assertEquals(
+        self.assertEqual(
             output.file_path('bar', 'xyz'),
             '/home/johndoe/data/myproject/glmdenoise/bar.xyz'
         )
@@ -33,7 +34,7 @@ class OutputTests(TestCase):
         bids = Mock()
         bids.root = '/d'
         output.fit_bids_context(bids, sub='1', ses='2', task='a')
-        self.assertEquals(
+        self.assertEqual(
             output.file_path('bar', 'xyz'),
             '/d/derivatives/glmdenoise/sub-1/ses-2/sub-1_ses-2_task-a_bar.xyz'
         )
