@@ -11,6 +11,7 @@ class Output(object):
 
     def __init__(self):
         self.bids = None
+        self.outdir = 'glmdenoise'
 
     def determine_location(self, sample_file):
         """Supply one input file to initialize output
@@ -20,9 +21,21 @@ class Output(object):
         """
 
         datadir = os.path.dirname(sample_file)
-        self.outdir = os.path.join(datadir, 'glmdenoise')
+        self.img = nibabel.load(sample_file)
+        if self.outdir == 'glmdenoise':
+            # still default, update
+            self.outdir = os.path.join(datadir, 'glmdenoise')
 
     def determine_location_in_bids(self, bids, sub, ses, task):
+        """Provide BIDS context including subject, session and task
+        
+        Args:
+            bids (glmdenoise.io.bids.BidsDirectory): Bids directory object
+            sub (str): subject
+            ses (str): session
+            task (str): task name
+        """
+
         self.bids = bids
         self.entities = {'sub': sub, 'ses': ses, 'task': task}
         subdir = 'sub-{}'.format(sub)
@@ -31,6 +44,16 @@ class Output(object):
         self.outdir = os.path.join(bids.root, subdir)
 
     def file_path(self, tag, ext):
+        """Obtain output file path for the given variable name and extension
+        
+        Args:
+            tag (str): Variable to save
+            ext (str): File extension without leading dot
+        
+        Returns:
+            str: Absolute file path for file to save
+        """
+
         if self.bids:
             if self.entities.get('ses'):
                 templ = 'sub-{sub}_ses-{ses}_task-{task}_{tag}.{ext}'
@@ -45,7 +68,18 @@ class Output(object):
         return Report()
 
     def save_image(self, imageArray, name):
-        pass
+        """Store brain image data in a nifti file using nibabel
+        
+        Args:
+            imageArray (ndarray): data
+            name (str): The name of the variable
+        """
+        img = nibabel.Nifti1Image(
+            imageArray,
+            self.img.get_affine(),
+            header=self.img.header
+        )
+        img.to_filename(self.file_path(name, 'nii'))
 
     def save_variable(self, var, name):
         """Store non-brain-image data in a file

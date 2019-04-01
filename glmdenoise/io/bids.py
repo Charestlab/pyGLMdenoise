@@ -12,6 +12,7 @@ class BidsDirectory(object):
         self.layout = BIDSLayout(directory, derivatives=True, ignore=[
             re.compile('_variant-')
         ])
+        self.root = directory
 
     def get_preprocessed_subjects_ids(self):
         return self.layout.get(return_type='id', target='subject')
