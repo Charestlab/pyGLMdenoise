@@ -23,11 +23,21 @@ class Output(object):
         self.outdir = os.path.join(datadir, 'glmdenoise')
 
     def determine_location_in_bids(self, bids, sub, ses, task):
-        pass
+        self.bids = bids
+        self.entities = {'sub': sub, 'ses': ses, 'task': task}
+        subdir = 'sub-{}'.format(sub)
+        sesdir = 'ses-{}'.format(ses)
+        subdir = os.path.join('derivatives', 'glmdenoise', subdir, sesdir)
+        self.outdir = os.path.join(bids.root, subdir)
 
     def file_path(self, tag, ext):
         if self.bids:
-            return ''
+            if self.entities.get('ses'):
+                templ = 'sub-{sub}_ses-{ses}_task-{task}_{tag}.{ext}'
+            else:
+                templ = 'sub-{sub}_task-{task}_{tag}.{ext}'
+            fname = templ.format(**dict(tag=tag, ext=ext, **self.entities))
+            return os.path.join(self.outdir, fname)
         else:
             return os.path.join(self.outdir, tag + '.' + ext)
 

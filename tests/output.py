@@ -7,7 +7,7 @@ class OutputTests(TestCase):
     @patch('glmdenoise.io.output.nibabel')
     @patch('glmdenoise.io.output.numpy')
     @patch('glmdenoise.io.output.mkdir')
-    def test_non_bids_vars(self, mkdir, numpy, nibabel):
+    def test_ensures_directory(self, mkdir, _np, _nb):
         from glmdenoise.io.output import Output
         output = Output()
         filepath='/home/johndoe/data/myproject/run_1.nii'
@@ -16,12 +16,8 @@ class OutputTests(TestCase):
         mkdir.assert_called_with(
             '/home/johndoe/data/myproject/glmdenoise'
         )
-        numpy.save.assert_called_with(
-            '/home/johndoe/data/myproject/glmdenoise/foo.npy',
-            11
-        )
 
-    def test_file_path(self):
+    def test_file_path_non_bids(self):
         from glmdenoise.io.output import Output
         output = Output()
         filepath='/home/johndoe/data/myproject/run_1.nii'
@@ -29,4 +25,15 @@ class OutputTests(TestCase):
         self.assertEquals(
             output.file_path('bar', 'xyz'),
             '/home/johndoe/data/myproject/glmdenoise/bar.xyz'
+        )
+
+    def test_file_path_bids(self):
+        from glmdenoise.io.output import Output
+        output = Output()
+        bids = Mock()
+        bids.root = '/d'
+        output.determine_location_in_bids(bids, sub='1', ses='2', task='a')
+        self.assertEquals(
+            output.file_path('bar', 'xyz'),
+            '/d/derivatives/glmdenoise/sub-1/ses-2/sub-1_ses-2_task-a_bar.xyz'
         )
