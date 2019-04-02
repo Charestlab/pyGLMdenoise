@@ -13,6 +13,7 @@ from glmdenoise.report import Report
 from glmdenoise.defaults import default_params
 from itertools import compress
 from scipy.io import loadmat
+from sklearn.preprocessing import normalize
 from tqdm import tqdm
 import warnings
 from joblib import Parallel, delayed
