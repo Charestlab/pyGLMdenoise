@@ -382,9 +382,8 @@ class GLMdenoise():
 
         stackdesign = np.vstack(whitened_design)
         modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
-        self.results['R2s'] = calccodStack(
-            whitened_data,
-            modelfits)
+        # The below does not currently work, see #47
+        # self.results['R2s'] = calccodStack(whitened_data, modelfits)
         """ TO DO
         self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
                                   for c_run in range(self.n_runs)]
@@ -440,7 +439,7 @@ class GLMdenoise():
                 self.results['PCA_R2s'][pc],
                 'PCcrossvalidationscaled%02d', dtype='scaled')
 
-        report.plot_image(self.results['R2s'], 'FinalModel')
+        #report.plot_image(self.results['R2s'], 'FinalModel')
         """ TODO
         for r in range(n_runs):
             report.plot_image(
