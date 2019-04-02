@@ -70,3 +70,14 @@ class BidsDirectory(object):
         get_runs = self.layout.parse_file_entities
         runs_bold = [get_runs(f)['run'] for f in bold_files]
         runs_evnt = [get_runs(f)['run'] for f in evnt_files]
+        runs_both = set(runs_bold).intersection(set(runs_evnt))
+        for f in range(len(bold_files)):
+            if runs_bold[f] not in runs_both:
+                del bold_files[f]
+        for f in range(len(evnt_files)):
+            if runs_evnt[f] not in runs_both:
+                del evnt_files[f]
+
+        
+        
+        
