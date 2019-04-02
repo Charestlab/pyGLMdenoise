@@ -16,7 +16,7 @@ class DirectoryTests(TestCase):
         bids.get_sessions_for_task_and_subject.return_value = ['1']
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids)
             self.assertEqual(run_files.call_count, 3)
@@ -38,7 +38,7 @@ class DirectoryTests(TestCase):
         bids.get_tasks_for_subject.side_effect = lambda s: tasks[s]
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub_num=1)
             self.assertEqual(run_files.call_count, 2)
@@ -55,7 +55,7 @@ class DirectoryTests(TestCase):
         bids.get_sessions_for_task_and_subject.return_value = ['1']
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
             self.assertEqual(run_files.call_count, 1)
@@ -70,7 +70,7 @@ class DirectoryTests(TestCase):
         bids.get_sessions_for_task_and_subject.return_value = ['1', '2']
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
             self.assertEqual(run_files.call_count, 2)
@@ -87,7 +87,7 @@ class DirectoryTests(TestCase):
         bids.get_sessions_for_task_and_subject.return_value = []
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids(bids, sub='01', task='a')
             self.assertEqual(run_files.call_count, 1)
@@ -102,7 +102,7 @@ class DirectoryTests(TestCase):
         bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
-        bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
+        bids.get_metas_boldfiles.return_value = [{'RepetitionTime': 2.2}]
         with patch('glmdenoise.io.directory.run_files') as run_files:
             run_bids_subset(bids, sub='01', task='a')
             run_files.assert_called_with(
