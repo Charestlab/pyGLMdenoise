@@ -82,10 +82,7 @@ def run_bids_subset(bids, sub, task, ses=None):
         print(msg.format(sub, task, ses))
         return
     event_files = bids.get_filepaths_event_runs(sub, task, ses)
-
-    if len(event_files) > len(bold_files):
-        event_files = event_files[:len(bold_files)]
-
+    bids.match_run_files(bold_files, event_files)
     metas = bids.get_metas_bold_runs(sub, task, ses)
     key = 'RepetitionTime'
     trs = [meta[key] for meta in metas if key in meta]
