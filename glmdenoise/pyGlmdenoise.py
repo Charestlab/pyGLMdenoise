@@ -92,7 +92,7 @@ def fit_runs(data, design):
 
     for run in prange(len(data)):
         n_vols = data[run].shape[0]
-        these_cols = np.arange(n_vols) + start_coldefault_params
+        these_cols = np.arange(n_vols) + start_col
         betas += X[:, these_cols] @ data[run]
         start_col += data[run].shape[0]
 
