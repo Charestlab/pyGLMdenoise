@@ -86,7 +86,7 @@ def run_bids_subset(bids, sub, task, ses=None):
     bold_files, event_files = bids.match_run_files(bold_files, event_files)
     pprint(bold_files)
     pprint(event_files)
-    metas = bids.get_metas(bold_files)
+    metas = bids.get_metas_boldfiles(bold_files)
     key = 'RepetitionTime'
     trs = [meta[key] for meta in metas if key in meta]
     assert trs, 'RepetitionTime not specified in metadata'

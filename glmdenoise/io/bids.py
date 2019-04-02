@@ -50,8 +50,24 @@ class BidsDirectory(object):
             return_type='file'
         ))
 
-    def get_metas(self, files):
-        return [self.layout.get_metadata(f) for f in files]
+    def get_metas_boldfiles(self, files):
+        """Return metadata for raw files corresponding to the given files
+        
+        Args:
+            files (list): List of filepaths for fmriprep preprocessed runs
+        
+        Returns:
+            list: List of metadata dictionaries
+        """
+
+        metas = []
+        keys = ('subject', 'task', 'session', 'run')
+        for derivfile in files:
+            entities = self.layout.parse_file_entities(derivfile)
+            query = {k:entities[k] for k in keys if k in entities}
+            query['suffix'] = 'bold' # get metadata from raw
+            metas.append(self.layout.get(**query)[0].metadata)
+        return metas
 
     def subject_id_from_number(self, sub_num):
         ids = self.layout.get(return_type='id', target='subject')
@@ -71,13 +87,13 @@ class BidsDirectory(object):
             (tuple): Tuple of modified (bold_files, evnt_files)
         """
 
-        get_runs = self.layout.parse_file_entities
-        runs_bold = [get_runs(f)['run'] for f in bold_files]
-        runs_evnt = [get_runs(f)['run'] for f in evnt_files]
+        get_ents = self.layout.parse_file_entities
+        runs_bold = [get_ents(f)['run'] for f in bold_files]
+        runs_evnt = [get_ents(f)['run'] for f in evnt_files]
         runs_both = set(runs_bold).intersection(set(runs_evnt))
 
         def in_both(fpath):
-            return get_runs(fpath)['run'] in runs_both
+            return get_ents(fpath)['run'] in runs_both
         return (
             list(filter(in_both, bold_files)),
             list(filter(in_both, evnt_files))
