@@ -1,6 +1,7 @@
 from glmdenoise.io.files import run_files
 from glmdenoise.io.bids import BidsDirectory
 from glmdenoise.io.output import Output
+from pprint import pprint
 
 
 def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
@@ -82,8 +83,10 @@ def run_bids_subset(bids, sub, task, ses=None):
         print(msg.format(sub, task, ses))
         return
     event_files = bids.get_filepaths_event_runs(sub, task, ses)
-    bids.match_run_files(bold_files, event_files)
-    metas = bids.get_metas_bold_runs(sub, task, ses)
+    bold_files, event_files = bids.match_run_files(bold_files, event_files)
+    pprint(bold_files)
+    pprint(event_files)
+    metas = bids.get_metas(bold_files)
     key = 'RepetitionTime'
     trs = [meta[key] for meta in metas if key in meta]
     assert trs, 'RepetitionTime not specified in metadata'

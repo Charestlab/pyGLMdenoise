@@ -9,6 +9,7 @@ class DirectoryTests(TestCase):
     def test_run_bids(self, Output):
         from glmdenoise.io.directory import run_bids
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_preprocessed_subjects_ids.return_value = ['01', '02']
         tasks = {'01': ['a', 'b'], '02': ['a']}
         bids.get_tasks_for_subject.side_effect = lambda s: tasks[s]
@@ -30,6 +31,7 @@ class DirectoryTests(TestCase):
     def test_run_bids_subject_number(self, Output):
         from glmdenoise.io.directory import run_bids
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         tasks = {'01': ['a', 'b'], '02': ['a']}
         bids.subject_id_from_number.side_effect = lambda sn: '0' + str(sn)
         bids.get_sessions_for_task_and_subject.return_value = ['1']
@@ -49,6 +51,7 @@ class DirectoryTests(TestCase):
     def test_run_bids_subject_task(self, Output):
         from glmdenoise.io.directory import run_bids
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_sessions_for_task_and_subject.return_value = ['1']
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
@@ -63,6 +66,7 @@ class DirectoryTests(TestCase):
     def test_run_bids_subject_separate_sessions(self, Output):
         from glmdenoise.io.directory import run_bids
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_sessions_for_task_and_subject.return_value = ['1', '2']
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
@@ -79,6 +83,7 @@ class DirectoryTests(TestCase):
     def test_run_bids_subject_no_sessions(self, Output):
         from glmdenoise.io.directory import run_bids
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_sessions_for_task_and_subject.return_value = []
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
@@ -94,6 +99,7 @@ class DirectoryTests(TestCase):
         from glmdenoise.io.directory import run_bids_subset
         out = Output.return_value
         bids = Mock()
+        bids.match_run_files.side_effect = lambda x, y: (x, y)
         bids.get_filepaths_bold_runs.side_effect = lambda s, t, z: ('bld', s, t, z)
         bids.get_filepaths_event_runs.side_effect = lambda s, t, z: ('evt', s, t, z)
         bids.get_metas_bold_runs.return_value = [{'RepetitionTime': 2.2}]
