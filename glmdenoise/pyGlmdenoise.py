@@ -71,8 +71,10 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
 @autojit
 def fit_runs(data, design):
     """Fits a least square of combined runs.
-       The matrix addition is equivalent to concatenating the list of data and the list of
-       design and fit it all at once. However, this is more memory efficient.
+
+    The matrix addition is equivalent to concatenating the list of data and the list of
+    design and fit it all at once. However, this is more memory efficient.
+
     Arguments:
         runs {list} -- List of runs. Each run is an TR x voxel sized array
         DM {list} -- List of design matrices. Each design matrix

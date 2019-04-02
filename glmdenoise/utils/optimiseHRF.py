@@ -96,64 +96,61 @@ def constructStimulusMatrix(v, prenumlag, postnumlag, wantwrap=0):
 
 
 def calccod(x, y, wantgain=0, wantmeansub=1):
-    """
-    Summary calculate the coefficient of determination
+    """Calculate the coefficient of determination
 
     Args:
-        Args:
         x ([type]): matrix with the same dimensions as y
         y ([type]): matrix with the same dimensions as x
         dim ([type]): is the dimension of interest
         wantgain (int, optional): Defaults to 0. 0 means normal
             1 means allow a gain to be applied to each case of <x>
-              to minimize the squared error with respect to <y>.
-              in this case, there cannot be any NaNs in <x> or <y>.
+            to minimize the squared error with respect to <y>.
+            in this case, there cannot be any NaNs in <x> or <y>.
             2 is like 1 except that gains are restricted to be non-negative.
-              so, if the gain that minimizes the squared error is negative,
-              we simply set the gain to be applied to be 0.
+            so, if the gain that minimizes the squared error is negative,
+            we simply set the gain to be applied to be 0.
             default: 0.
         wantmeansub (int, optional): Defaults to 1.
             0 means do not subtract any mean.  this makes it such that
-              the variance quantification is relative to 0.
+            the variance quantification is relative to 0.
             1 means subtract the mean of each case of <y> from both
-              <x> and <y> before performing the calculation.  this makes
-              it such that the variance quantification
-              is relative to the mean of each case of <y>.
-              note that <wantgain> occurs before <wantmeansub>.
+            <x> and <y> before performing the calculation.  this makes
+            it such that the variance quantification
+            is relative to the mean of each case of <y>.
+            note that <wantgain> occurs before <wantmeansub>.
             default: 1.
 
-     calculate the coefficient of determination (R^2) indicating
-     the percent variance in <y> that is explained by <x>.  this is achieved
-     by calculating 100*(1 - sum((y-x).^2) / sum(y.^2)).  note that
-     by default, we subtract the mean of each case of <y> from both <x>
-     and <y> before proceeding with the calculation.
+    calculate the coefficient of determination (R^2) indicating
+    the percent variance in <y> that is explained by <x>.  this is achieved
+    by calculating 100*(1 - sum((y-x).^2) / sum(y.^2)).  note that
+    by default, we subtract the mean of each case of <y> from both <x>
+    and <y> before proceeding with the calculation.
 
-     the quantity is at most 100 but can be 0 or negative (unbounded).
-     note that this metric is sensitive to DC and scale and is not symmetric
-     (i.e. if you swap <x> and <y>, you may obtain different results).
-     it is therefore fundamentally different than Pearson's correlation
-     coefficient (see calccorrelation.m).
+    the quantity is at most 100 but can be 0 or negative (unbounded).
+    note that this metric is sensitive to DC and scale and is not symmetric
+    (i.e. if you swap <x> and <y>, you may obtain different results).
+    it is therefore fundamentally different than Pearson's correlation
+    coefficient (see calccorrelation.m).
 
-     NaNs are handled gracefully (a NaN causes that data point to be ignored).
+    NaNs are handled gracefully (a NaN causes that data point to be ignored).
 
-     if there are no valid data points (i.e. all data points are
-     ignored because of NaNs), we return NaN for that case.
+    if there are no valid data points (i.e. all data points are
+    ignored because of NaNs), we return NaN for that case.
 
-     note some weird cases:
-       calccod([],[]) is []
+    note some weird cases:
+    calccod([],[]) is []
 
-     history:
-     2013/08/18 - fix pernicious case where <x> is all zeros and <wantgain>
-                  is 1 or 2.
-     2010/11/28 - add <wantgain>==2 case
-     2010/11/23 - changed the output range to percentages.  thus, the range
-                  is (-Inf,100]. also, we removed the <wantr> input since
-                  it was dumb.
+    history:
+    2013/08/18 - fix pernicious case where <x> is all zeros and <wantgain>
+    is 1 or 2.
+    2010/11/28 - add <wantgain>==2 case
+    2010/11/23 - changed the output range to percentages.  thus, the range
+    is (-Inf,100]. also, we removed the <wantr> input since
+    it was dumb.
 
-     example:
-     x = np.random.random(100)
-     calccod(x,x+0.1*np.random.random(100))
-
+    example:
+    x = np.random.random(100)
+    calccod(x,x+0.1*np.random.random(100))
     """
 
     # input
@@ -237,10 +234,11 @@ def mtimesStack(m1, m2):
 
 
 def olsmatrix(X):
-    """
+    """OLS regression
+
     what we want to do is to perform OLS regression using <X>
     and obtain the parameter estimates.  this is accomplished
-    by inv(X'*X)*X'*y = f*y where y is the data (samples x cases).
+    by inv(X'\*X)\*X'\*y = f\*y where y is the data (samples x cases).
 
     what this function does is to return <f> which has dimensions
     parameters x samples.
@@ -259,10 +257,10 @@ def olsmatrix(X):
     note that no scale normalization of the regressor columns is performed.
 
     Args:
-        X ([2D]): Samples by parameters
+        X (ndarray): Samples by parameters
 
     Returns:
-        [f]: 2D: parameters by Samples
+        (f): 2D parameters by Samples
     """
 
     bad = np.all(X == 0, axis=0)
@@ -310,54 +308,44 @@ def convolveDesign(X, hrf):
 
 
 def optimiseHRF(
-    design,
-    data,
-    tr,
-    hrfknobs,
-    combinedmatrix,
-    numforhrf=50,
-    hrfthresh=0.5,
-    hrffitmask=1,
+        design,
+        data,
+        tr,
+        hrfknobs,
+        combinedmatrix,
+        numforhrf=50,
+        hrfthresh=0.5,
+        hrffitmask=1,
+    ):
+    """Optimise hrf from a selection of voxels.
 
-
-):
-    """
-    Optimise hrf from a selection of voxels.
     This uses an iterative fitting optimisation procedure,
     where we fit for betas and then fit for hrf using a fir
     like approach.
 
     Args:
         design (pandas dataframe): this is a pandas data frame with keys:
-                ['trial_type']: stimulus condition index
-                ['onset']: onsets in s for each event
-                ['duration']: duration for each event
-
+            ['trial_type']: stimulus condition index
+            ['onset']: onsets in s for each event
+            ['duration']: duration for each event
         data (2d array): data (time x vox). this data should already
-                have polynomials projected out.
-
+            have polynomials projected out.
         tr (float): the sampling rate in seconds
-
-        hrfknobs (1d array):should be time x 1 with the initial seed
-                for the HRF.  The length of this vector indicates the
-                number of time points that we will attempt to estimate
-                in the HRF.
-
-                Note on normalization: after fitting the HRF, we
-                normalize the HRF to peak at 1 (and adjust amplitudes
-                accordingly).
-
+        hrfknobs (1d array): should be time x 1 with the initial seed
+            for the HRF.  The length of this vector indicates the
+            number of time points that we will attempt to estimate
+            in the HRF. Note on normalization: after fitting the HRF, we
+            normalize the HRF to peak at 1 (and adjust amplitudes
+            accordingly).
         combinedmatrix (stack of 2d arrays): projection matrix of the
                 polynomials and extra regressors (if passed by user).
                 This is used to whiten the design matrix.
-
         numforhrf (int, optional): Defaults to 50.
                 is a positive integer indicating the number of voxels
                 (with the best R^2 values) to consider in fitting the
                 global HRF.  (If there are fewer than that number of
                 voxels available, we just use the voxels that are
                 available.)
-
         hrfthresh (float, optional): Defaults to .5.
                 If the R^2 between the estimated HRF and the initial HRF
                 is less than <hrfthresh>, we decide to just use the initial
@@ -365,12 +353,12 @@ def optimiseHRF(
                 the estimated HRF.
 
     Returns:
-        [Dict]: we return a dictionary with kers:
-                ["hrf"]: the optimised hrf (but see note above on hrfthresh)
-                ["hrffitvoxels"]: the indices of the voxels used to fit.
-                ["convdesign"]: the design convolved with the optimised hrf
-                                and polynomials projected out.
-                ["seedhrf"]: we return the seed hrf for book keeping.
+        (Dict): we return a dictionary with kers:
+            ["hrf"]: the optimised hrf (but see note above on hrfthresh)
+            ["hrffitvoxels"]: the indices of the voxels used to fit.
+            ["convdesign"]: the design convolved with the optimised hrf
+            and polynomials projected out.
+            ["seedhrf"]: we return the seed hrf for book keeping.
 
     """
 

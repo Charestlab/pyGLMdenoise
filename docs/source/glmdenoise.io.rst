@@ -9,6 +9,7 @@ Submodules
    glmdenoise.io.bids
    glmdenoise.io.directory
    glmdenoise.io.files
+   glmdenoise.io.input
    glmdenoise.io.output
 
 Module contents
