@@ -1,5 +1,6 @@
 from glmdenoise.pyGlmdenoise import GLMdenoise
 from glmdenoise.io.output import Output
+from glmdenoise.io.input import load_nifti
 from pprint import pprint
 import nibabel
 import pandas
@@ -19,7 +20,7 @@ def run_files(bold_files, event_files, tr, out=None):
     if out is None:
         out = Output()
     out.configure_from(sample_file=bold_files[0])
-    data = [nibabel.load(f).get_data() for f in bold_files]
+    data = [load_nifti(f) for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
     gd = GLMdenoise(design, data, tr)
     gd.fit()
