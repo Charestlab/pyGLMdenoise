@@ -1,5 +1,5 @@
 import glmdenoise
-from os import mkdir
+from os import makedirs
 import nibabel
 import numpy
 import os
@@ -49,7 +49,7 @@ class Output(object):
         Tries to create the output directory if it isn't there yet.
         """
         if not os.path.isdir(self.outdir):
-            mkdir(self.outdir)
+            makedirs(self.outdir)
 
     def safe_name(self, name):
         """Remove spaces etc so it can be used as html identifier
