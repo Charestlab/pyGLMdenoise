@@ -143,5 +143,5 @@ class Output(object):
         """
 
         fpath = self.file_path(name, 'png')
-        figure.save_figure(fpath)
+        figure.savefig(fpath)
         return fpath

@@ -557,4 +557,5 @@ def optimiseHRF(
     f["convdesign"] = convdesign
     f["whitedesign"] = whitedesign
     f["seedhrf"] = hrfknobs
+    f["hrffitmask"] = hrffitmask
     return f

@@ -26,7 +26,7 @@ class Report(object):
         """
         fpath = self.output.save_figure(figure, title)
         block_id = self.output.safe_name(title)
-        html = f('<h3 id="{block_id}">{name}</h3><img src="{fpath}" />\n')
+        html = f('<h3 id="{block_id}">{title}</h3><img src="{fpath}" />\n')
         self.blocks.append(html)
         self.toc.append(title)
 
@@ -91,7 +91,7 @@ class Report(object):
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
         self.add_image(fig, title)
 
-    def plot_image(self, imgvector, title='no title', dtype='mask'):
+    def plot_image(self, imgvector, title='no title', dtype='mask', drange=None):
         """Plot slices of a 3D image in a grid.
 
         Uses the spatial dimensions set on the report instance. 

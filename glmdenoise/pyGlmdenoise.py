@@ -161,10 +161,10 @@ class GLMdenoise():
             np.asarray(np.asarray(PCresults)[:, 0]))
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
         self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
-        best_mask = np.any(
+        self.best_mask = np.any(
             self.results['PCA_R2s'] > self.params['R2thresh'], 0)
         self.results['xval'] = np.nanmedian(
-            self.results['PCA_R2s'][:, best_mask], 1)
+            self.results['PCA_R2s'][:, self.best_mask], 1)
         select_pca = select_noise_regressors(
             np.asarray(self.results['xval']))
         self.results['select_pca'] = select_pca
@@ -245,35 +245,39 @@ class GLMdenoise():
         #                           for c_run in range(self.n_runs)]
         print('Done')
 
-    def plot_figures(self, report=None):
+    def plot_figures(self, report=None, spatialdims=None):
         # start a new report with figures
         report = report or Report()
-        report.spatialdims = self.params['xyzsize']
+        report.spatialdims = self.params.get('xyzsize') or spatialdims
 
-        # plot solutions
-        title = 'HRF fit'
-        report.plot_hrf(self.hrfparams['hrfseed'],
-                        self.hrfparams['hrf'], self.tr, title)
-        report.plot_image(self.hrfparams['hrffitvoxels'], title)
+        if self.params.get('hrfmodel') == 'optimize':
+            title = 'HRF fit'
+            report.plot_hrf(
+                self.hrfparams['seedhrf'],
+                self.hrfparams['hrf'],
+                self.tr,
+                title
+            )
+            report.plot_image(self.hrfparams['hrffitvoxels'], title)
 
-        for c_run in range(self.n_runs):
+        for pc in range(self.n_pcs):
             report.plot_scatter_sparse(
                 [
                     (self.results['PCA_R2s'][0],
-                        self.results['PCA_R2s'][c_run]),
-                    (self.results['PCA_R2s'][0][self.pcvoxels],
-                        self.results['PCA_R2s'][c_run][self.pcvoxels]),
+                        self.results['PCA_R2s'][pc]),
+                    (self.results['PCA_R2s'][0][self.best_mask],
+                        self.results['PCA_R2s'][pc][self.best_mask]),
                 ],
                 xlabel='Cross-validated R^2 (0 PCs)',
-                ylabel='Cross-validated R^2 ({p} PCs)',
-                title='PCscatter{p}',
+                ylabel='Cross-validated R^2 ({} PCs)'.format(pc),
+                title='PCscatter{}'.format(pc),
                 crosshairs=True,
             )
 
         # plot voxels for noise regressor selection
         title = 'Noise regressor selection'
         report.plot_noise_regressors_cutoff(self.results['xval'],
-                                            self.n_pcs,
+                                            self.results['select_pca'],
                                             title='Chosen number of regressors')
         report.plot_image(self.results['noise_pool_mask'], title)
 
@@ -281,18 +285,18 @@ class GLMdenoise():
         report.plot_image(self.results['mean_image'], 'Mean volume')
         report.plot_image(self.results['noise_pool_mask'], 'Noise Pool')
         report.plot_image(self.results['mean_mask'], 'Noise Exclude')
-        if self.hrfparams['hrffitmask'] != 1:
+        if self.hrfparams.get('hrffitmask', 1) != 1:
             report.plot_image(self.hrfparams['hrffitmask'], 'HRFfitmask')
-        if self.params['pcR2cutoffmask'] != 1:
+        if self.params.get('pcR2cutoffmask', 1) != 1:
             report.plot_image(self.params['pcR2cutoffmask'], 'PCmask')
 
         for pc in range(self.n_pcs):
             report.plot_image(
                 self.results['PCA_R2s'][pc],
-                'PCcrossvalidation%02d', dtype='range')
+                'PCcrossvalidation{}'.format(pc), dtype='range')
             report.plot_image(
                 self.results['PCA_R2s'][pc],
-                'PCcrossvalidationscaled%02d', dtype='scaled')
+                'PCcrossvalidationscaled{}'.format(pc), dtype='scaled')
 
         #report.plot_image(self.results['R2s'], 'FinalModel')
         """ TODO
@@ -304,10 +308,12 @@ class GLMdenoise():
         thresh = np.percentile(
             np.abs(np.vstack(self.results['PCA_weights']).ravel()), 99)
         for c_run in range(1, self.n_runs):
-            for pc in range(1, self.n_pcas):
+            for pc in range(1, self.n_pcs):
+                # matrix to array for reshaping:
+                weights = np.asarray(self.results['PCA_weights'][pc][c_run])
                 report.plot_image(
-                    self.results['PCA_weights'][pc][c_run].mean(axis=0),
-                    'PCmap_run%02d_num%02d.png',
+                    weights.mean(axis=0),
+                    'PCmap_run{}_num{}'.format(c_run, pc),
                     dtype='custom',
                     drange=[-thresh, thresh]
                 )
