@@ -93,7 +93,7 @@ class Output(object):
 
         report = glmdenoise.report.Report()
         report.use_output(self)
-        report.spatialdims = self.img.shape
+        report.spatialdims = self.img.shape[:3]
         return report
 
     def save_image(self, imageArray, name):
@@ -103,6 +103,7 @@ class Output(object):
             imageArray (ndarray): data
             name (str): The name of the variable
         """
+        self.ensure_directory()
         img = nibabel.Nifti1Image(
             imageArray,
             self.img.get_affine(),
@@ -128,7 +129,7 @@ class Output(object):
             name (str): filename
             ext (str): file extension
         """
-
+        self.ensure_directory()
         with open(self.file_path(name, ext), 'w') as text_file:
             text_file.write(text)
 
@@ -142,7 +143,7 @@ class Output(object):
         Returns:
             str: absolute filepath to new png file
         """
-
+        self.ensure_directory()
         fpath = self.file_path(name, 'png')
         figure.savefig(fpath)
         return fpath

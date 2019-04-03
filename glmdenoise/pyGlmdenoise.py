@@ -281,7 +281,6 @@ class GLMdenoise():
         report.plot_noise_regressors_cutoff(self.results['xval'],
                                             self.results['select_pca'],
                                             title='Chosen number of regressors')
-        report.plot_image(self.results['noise_pool_mask'], title)
 
         # various images
         report.plot_image(self.results['mean_image'], 'Mean volume')
