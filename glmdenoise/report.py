@@ -2,7 +2,6 @@ from glmdenoise.utils.make_image_stack import make_image_stack
 import glmdenoise.io.output
 from matplotlib import pyplot as plt
 from ww import f
-from os.path import join
 import numpy
 
 

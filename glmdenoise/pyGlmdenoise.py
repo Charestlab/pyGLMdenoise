@@ -1,9 +1,9 @@
-from numba import autojit, prange
 import numpy as np
 import numpy
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
+from tqdm import tqdm
+import warnings
+from joblib import Parallel, delayed
+from sklearn.preprocessing import normalize
 from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
 from glmdenoise.select_noise_regressors import select_noise_regressors
@@ -11,147 +11,11 @@ from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf
 from glmdenoise.report import Report
 from glmdenoise.defaults import default_params
-from itertools import compress
-from scipy.io import loadmat
-from tqdm import tqdm
-import warnings
-from joblib import Parallel, delayed
+from glmdenoise.whiten_data import whiten_data
+from glmdenoise.fit_runs import fit_runs
+from glmdenoise.cross_validate import cross_validate
 from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-def R2_nom_denom(y, yhat):
-    """ Calculates the nominator and denomitor for calculating R-squared
-
-    Args:
-        y (array): data
-        yhat (array): predicted data data
-
-    Returns:
-        nominator (float or array), denominator (float or array)
-    """
-    y, yhat = np.array(y), np.array(yhat)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-    return nom, denom
-
-
-def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
-    """[summary]
-
-    Arguments:
-        data {[type]} -- [description]
-        design {[type]} -- [description]
-
-    Keyword Arguments:
-        extra_regressors {bool} -- [description] (default: {False})
-        poly_degs {[type]} -- [description] (default: {np.arange(5)})
-
-    Returns:
-        [type] -- [description]
-    """
-
-    # whiten data
-    whitened_data = []
-    whitened_design = []
-
-    for i, (y, X) in enumerate(zip(data, design)):
-        polynomials = make_poly_matrix(X.shape[0], poly_degs)
-        if extra_regressors:
-            if extra_regressors[i].any():
-                polynomials = np.c_[polynomials, extra_regressors[i]]
-
-        whitened_design.append(make_project_matrix(polynomials) @ X)
-        whitened_data.append(make_project_matrix(polynomials) @ y)
-
-    return whitened_data, whitened_design
-
-
-@autojit
-def fit_runs(data, design):
-    """Fits a least square of combined runs.
-
-    The matrix addition is equivalent to concatenating the list of data and the list of
-    design and fit it all at once. However, this is more memory efficient.
-
-    Arguments:
-        runs {list} -- List of runs. Each run is an TR x voxel sized array
-        DM {list} -- List of design matrices. Each design matrix
-                     is an TR x predictor sizec array
-
-    Returns:
-        [array] -- betas from fit
-    """
-
-    X = np.vstack(design)
-    X = np.linalg.inv(X.T @ X) @ X.T
-
-    betas = 0
-    start_col = 0
-
-    for run in prange(len(data)):
-        n_vols = data[run].shape[0]
-        these_cols = np.arange(n_vols) + start_col
-        betas += X[:, these_cols] @ data[run]
-        start_col += data[run].shape[0]
-
-    return betas
-
-
-def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5)):
-    """[summary]
-
-    Arguments:
-        data {[type]} -- [description]
-        design {[type]} -- [description]
-
-    Keyword Arguments:
-        extra_regressors {bool} -- [description] (default: {False})
-        poly_degs {[type]} -- [description] (default: {np.arange(5)})
-
-    Returns:
-        [type] -- [description]
-    """
-
-    whitened_data, whitened_design = whiten_data(
-        data, design, extra_regressors, poly_degs)
-
-    n_runs = len(data)
-    nom_denom = []
-    betas = []
-    r2_runs = []
-    for run in tqdm(range(n_runs), desc='Cross-validating run'):
-        # fit data using all the other runs
-        mask = np.arange(n_runs) != run
-
-        betas.append(fit_runs(
-            list(compress(whitened_data, mask)),
-            list(compress(whitened_design, mask))))
-
-        # predict left-out run with vanilla design matrix
-        yhat = design[run] @ betas[run]
-
-        y = data[run]
-        # get polynomials
-        polynomials = make_poly_matrix(y.shape[0], poly_degs)
-        # project out polynomials from data and prediction
-        y = make_project_matrix(polynomials) @ y
-        yhat = make_project_matrix(polynomials) @ yhat
-
-        # get run-wise r2s
-        nom, denom = R2_nom_denom(y, yhat)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            r2_runs.append(np.nan_to_num(1 - (nom / denom)))
-
-        nom_denom.append((nom, denom))
-
-    # calculate global R2
-    nom = np.array(nom_denom).sum(0)[0, :]
-    denom = np.array(nom_denom).sum(0)[1, :]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        r2s = np.nan_to_num(1 - (nom / denom))
-    return (r2s, r2_runs, betas)
 
 
 class GLMdenoise():

@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.interpolate import pchip
-import pandas as pd
 
 
 def make_design(events, tr, n_times, hrf=None):

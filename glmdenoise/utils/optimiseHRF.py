@@ -1,6 +1,5 @@
 import numpy as np
 from glmdenoise.utils.make_design_matrix import make_design
-from scipy.interpolate import pchip
 
 
 def constructStimulusMatrices(m, prenumlag=0, postnumlag=0, wantwrap=0):
