@@ -5,7 +5,7 @@ import warnings
 from joblib import Parallel, delayed
 from sklearn.preprocessing import normalize
 from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
+from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, optimiseHRF
 from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf
@@ -26,41 +26,35 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data, tr, params=None):
-        """[summary]
+    def __init__(self, params=None):
+        """GlmDenoise constructor
 
         Arguments:
-            design {[type]} -- [description]
-            data {[type]} -- [description]
-            tr {float} -- TR in seconds
-
-        Keyword Arguments:
-            params {dict} -- [description] (default: {10})
+            params (dict): Dictionary of parameters. Optional
         """
 
         params = params or dict()
         for key, _ in default_params.items():
             params[key] = params.get(key) or default_params[key]
 
-        stimdur = numpy.median(design[0].duration.values)
-        params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
-        params['tr'] = tr
-        n_jobs = params['n_jobs']
-        n_pcs = params['n_pcs']
-        n_boots = params['n_boots']
-
-        self.design = design
-        self.data = data
         self.params = params
-        self.tr = tr
         self.extra_regressors = params['extra_regressors']
-        self.n_pcs = n_pcs
-        self.dims = data[0].shape
-        self.n_jobs = n_jobs
-        self.n_boots = n_boots
-        self.n_runs = len(data)
+        self.n_pcs = params['n_pcs']
+        self.n_jobs = params['n_jobs']
+        self.n_boots = params['n_boots']
         self.hrfparams = {}
         self.results = dict()
+
+    def fit(self, design, data, tr):
+
+        self.design = design
+        self.tr = tr
+        self.data = data
+        self.n_runs = len(data)
+
+        stimdur = numpy.median(design[0].duration.values)
+        self.params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
+        self.params['tr'] = tr
 
         # calculate polynomial degrees
         max_poly_deg = int(((data[0].shape[0] * self.tr) / 60) // 2) + 1
@@ -74,7 +68,7 @@ class GLMdenoise():
         self.data = [d[:, self.results['mean_mask']].astype(
             np.float16) for d in self.data]
 
-    def fit(self):
+
         """
         """
         if self.params['hrfmodel'] == 'optimise':
@@ -243,14 +237,12 @@ class GLMdenoise():
 
         print('Calculating overall R2 of final fit...')
 
-        stackdesign = np.vstack(whitened_design)
-        modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
         # The below does not currently work, see #47
+        # stackdesign = np.vstack(whitened_design)
+        # modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
         # self.results['R2s'] = calccodStack(whitened_data, modelfits)
-        """ TO DO
-        self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
-                                  for c_run in range(self.n_runs)]
-        """
+        # self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
+        #                           for c_run in range(self.n_runs)]
         print('Done')
 
     def plot_figures(self, report=None):
