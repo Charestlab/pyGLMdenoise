@@ -17,6 +17,7 @@ def select_noise_regressors(r2_nrs, pcstop=1.05):
     curve = r2_nrs - r2_nrs[0]
 
     # initialize (this will hold the best performance observed thus far)
+    chosen = 0
     best = -np.Inf
     for p in range(1, numpcstotry):
 
