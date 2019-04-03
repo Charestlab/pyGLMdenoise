@@ -93,6 +93,7 @@ class Output(object):
 
         report = glmdenoise.report.Report()
         report.use_output(self)
+        report.spatialdims = self.img.shape
         return report
 
     def save_image(self, imageArray, name):

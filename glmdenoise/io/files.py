@@ -22,7 +22,7 @@ def run_files(bold_files, event_files, tr, out=None):
     out.configure_from(sample_file=bold_files[0])
     data = [load_nifti(f) for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
-    gd = GLMdenoise()
+    gd = GLMdenoise(params={'hrfmodel': 'assume'})
     gd.fit(design, data, tr)
     gd.plot_figures(out.create_report())
     for image_name in ['pseudo_t_stats']:

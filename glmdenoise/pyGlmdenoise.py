@@ -246,9 +246,11 @@ class GLMdenoise():
         print('Done')
 
     def plot_figures(self, report=None, spatialdims=None):
+
         # start a new report with figures
-        report = report or Report()
-        report.spatialdims = self.params.get('xyzsize') or spatialdims
+        if report is None:
+            report = Report()
+            report.spatialdims = self.params.get('xyzsize') or spatialdims
 
         if self.params.get('hrfmodel') == 'optimize':
             title = 'HRF fit'
