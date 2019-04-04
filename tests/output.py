@@ -38,3 +38,14 @@ class OutputTests(TestCase):
             output.file_path('bar', 'xyz'),
             '/d/derivatives/glmdenoise/sub-1/ses-2/sub-1_ses-2_task-a_bar.xyz'
         )
+
+    def test_file_path_bid_no_ses(self):
+        from glmdenoise.io.output import Output
+        output = Output()
+        bids = Mock()
+        bids.root = '/d'
+        output.fit_bids_context(bids, sub='1', ses=None, task='a')
+        self.assertEqual(
+            output.file_path('bar', 'xyz'),
+            '/d/derivatives/glmdenoise/sub-1/sub-1_task-a_bar.xyz'
+        )

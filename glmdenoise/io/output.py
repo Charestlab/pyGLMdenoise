@@ -39,8 +39,11 @@ class Output(object):
         self.bids = bids
         self.entities = {'sub': sub, 'ses': ses, 'task': task}
         subdir = 'sub-{}'.format(sub)
-        sesdir = 'ses-{}'.format(ses)
-        subdir = os.path.join('derivatives', 'glmdenoise', subdir, sesdir)
+        if ses is None:
+            subdir = os.path.join('derivatives', 'glmdenoise', subdir)
+        else:
+            sesdir = 'ses-{}'.format(ses)
+            subdir = os.path.join('derivatives', 'glmdenoise', subdir, sesdir)
         self.outdir = os.path.join(bids.root, subdir)
 
     def ensure_directory(self):
