@@ -3,6 +3,7 @@ from numpy.random import RandomState
 import numpy
 import pandas
 import socket
+import os
 
 
 class MainClassTest(TestCase):
@@ -10,6 +11,9 @@ class MainClassTest(TestCase):
     @skipIf(
         socket.gethostname() == 'colles-d1800479',
         'RandomState different on Jaspers workstation'
+    )
+    @unittest.skipIf('TRAVIS' in os.environ,
+        'Skipping this test on Travis CI.'
     )
     def test_fit_assume_hrf(self):
         from glmdenoise.pyGlmdenoise import GLMdenoise
