@@ -106,8 +106,14 @@ class Report(object):
         # dtype= mask, range, scaled, percentile, custom
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
+        if imgvector.size < self.mean_mask.size:
+            full_imgvector = numpy.zeros(self.mean_mask.shape)
+            full_imgvector[self.mean_mask] = imgvector
+        else:
+            full_imgvector = imgvector
         stack = make_image_stack(
-            imgvector.reshape(self.spatialdims, order='F'))
+            full_imgvector.reshape(self.spatialdims, order='F')
+        )
         ax.imshow(stack)
         self.add_image(fig, title)
 
