@@ -1,5 +1,6 @@
 from unittest import TestCase, skipIf
 from numpy.random import RandomState
+import numpy
 import pandas
 import socket
 
@@ -14,17 +15,23 @@ class MainClassTest(TestCase):
         from glmdenoise.pyGlmdenoise import GLMdenoise
         rng = RandomState(seed=156336647)
         design1 = pandas.DataFrame([
-            {'onset': 0, 'duration': 0.5, 'trial_type': 'foo'},
-            {'onset': 1, 'duration': 0.5, 'trial_type': 'bar'},
-            {'onset': 2, 'duration': 0.5, 'trial_type': 'foo'},
-            {'onset': 3, 'duration': 0.5, 'trial_type': 'bar'}
+            {'onset': 0,  'duration': 0.5, 'trial_type': 'foo'},
+            {'onset': 8,  'duration': 0.5, 'trial_type': 'bar'},
+            {'onset': 16, 'duration': 0.5, 'trial_type': 'foo'},
+            {'onset': 24, 'duration': 0.5, 'trial_type': 'bar'}
         ])
         design = [design1] * 3
+        brain = numpy.array([0.1, 1, 1, 1, 0.1])
+        response = numpy.ones([8, 5]) * 0.5
+        # foo voxel
+        response[:, 2] = numpy.array([0.5, 1, 0.5, 0.5, 0.5, 1, 0.5, 0.5])
+        # bar voxel
+        response[:, 3] = numpy.array([0.5, 0.5, 0.5, 1, 0.5, 0.5, 0.5, 1])
         data = [
-            rng.rand(4, 5),
-            rng.rand(4, 5),
-            rng.rand(4, 5)
+            (rng.rand(8, 5) + response) * brain,
+            (rng.rand(8, 5) + response) * brain,
+            (rng.rand(8, 5) + response) * brain,
         ]
         gd = GLMdenoise(params={'hrfmodel': 'assume'})
-        gd.fit(design, data, 1.0)
+        gd.fit(design, data, 4.0)
         self.assertEqual(gd.results['select_pca'], 1)
