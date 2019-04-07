@@ -1,8 +1,9 @@
 from glmdenoise.utils.make_image_stack import make_image_stack
+import glmdenoise.io.output
 from matplotlib import pyplot as plt
 from ww import f
-from os.path import join
 import numpy
+from os.path import basename
 
 
 class Report(object):
@@ -13,19 +14,24 @@ class Report(object):
     def __init__(self):
         self.blocks = []
         self.toc = []
+        self.output = glmdenoise.io.output.Output()
 
-    def add_image(self, name):
+    def use_output(self, output):
+        self.output = output
+
+    def add_image(self, figure, title):
         """Add html for a figure
 
         Args:
             name (str): Name of figure
         """
-
-        fpath = self.filepath_for(name)
-        block_id = self.id_for(name)
-        html = f('<h3 id="{block_id}">{name}</h3><img src="{fpath}" />\n')
+        fpath = self.output.save_figure(figure, title)
+        fname = basename(fpath)
+        plt.close(figure)
+        block_id = self.output.safe_name(title)
+        html = f('<h3 id="{block_id}">{title}</h3><img src="{fname}" />\n')
         self.blocks.append(html)
-        self.toc.append(name)
+        self.toc.append(title)
 
     def add_toc(self):
         """Add table of contents (list with links) to top of report
@@ -34,7 +40,7 @@ class Report(object):
         html = '<h2>Table of Contents</h2>\n'
         html += '<ol>\n'
         for name in self.toc:
-            block_id = self.id_for(name)
+            block_id = self.output.safe_name(name)
             html += f('<li><a href="#{block_id}">{name}</a></li>\n')
         html += '</ol>\n'
         self.blocks.insert(0, html)
@@ -45,9 +51,8 @@ class Report(object):
 
         self.add_toc()
         self.blocks.insert(0, '<h1>GLMdenoise</h1>\n')
-        with open('report.html', 'w') as html_file:
-            for block in self.blocks:
-                html_file.write(block + '\n')
+        text = '\n'.join(self.blocks)
+        self.output.save_text(text, 'report', 'html')
 
     def plot_hrf(self, hrf1, hrf2, tr=2.0, title='Hemodynamic Reponse Function'):
         """Line plot of initial and estimated HRF
@@ -67,8 +72,7 @@ class Report(object):
         ax.axhline(0)
         ax.legend(loc='upper right')
         ax.set(xlabel='Time from condition onset (s)', ylabel='Response')
-        fig.savefig(self.filepath_for(title))
-        self.add_image(title)
+        self.add_image(fig, title)
 
     def plot_noise_regressors_cutoff(self, r2, n_noise_regressors, title):
         """Line plot of model fit by number of noise regressors used
@@ -88,10 +92,9 @@ class Report(object):
         ax.set_xticks(range(max_nregressors))
         ax.set_title(title)
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
-        fig.savefig(self.filepath_for(title))
-        self.add_image(title)
+        self.add_image(fig, title)
 
-    def plot_image(self, imgvector, title='no title', dtype='mask'):
+    def plot_image(self, imgvector, title='no title', dtype='mask', drange=None):
         """Plot slices of a 3D image in a grid.
 
         Uses the spatial dimensions set on the report instance. 
@@ -107,16 +110,10 @@ class Report(object):
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         stack = make_image_stack(
-            imgvector.reshape(self.spatialdims, order='F'))
+            imgvector.reshape(self.spatialdims) #, order='F'
+        )
         ax.imshow(stack)
-        fig.savefig(self.filepath_for(title))
-        self.add_image(title)
-
-    def filepath_for(self, name):
-        return join('figures', self.id_for(name) + '.png')
-
-    def id_for(self, name):
-        return name.replace(' ', '_')
+        self.add_image(fig, title)
 
     def plot_scatter_sparse(self, data, xlabel, ylabel, title, crosshairs=False):
         """Scatter plot using max 1000 points for each series
@@ -137,9 +134,4 @@ class Report(object):
             subset = numpy.random.choice(x.size, nsample, replace=False)
             ax.scatter(x[subset], y[subset])
         ax.set(xlabel=xlabel, ylabel=ylabel)
-        fig.savefig(self.filepath_for(title))
-<<<<<<< HEAD
-        self.add_image(title)
-=======
-        self.add_image(title)
->>>>>>> master
+        self.add_image(fig, title)

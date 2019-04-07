@@ -1,7 +1,7 @@
-glmdenoise.makeimagestack module
+glmdenoise.r2\_nom\_denom module
 ================================
 
-.. automodule:: glmdenoise.makeimagestack
+.. automodule:: glmdenoise.r2_nom_denom
     :members:
     :undoc-members:
     :show-inheritance:

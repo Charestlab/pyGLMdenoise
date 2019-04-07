@@ -1,152 +1,21 @@
-from numba import autojit, prange
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, calccodStack, optimiseHRF
-from glmdenoise.utils.select_noise_regressors import select_noise_regressors
-from glmdenoise.report import Report
-
-from itertools import compress
-from scipy.io import loadmat
+import numpy
 from tqdm import tqdm
 import warnings
 from joblib import Parallel, delayed
+from sklearn.preprocessing import normalize
+from glmdenoise.utils.make_design_matrix import make_design
+from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, optimiseHRF
+from glmdenoise.select_noise_regressors import select_noise_regressors
+from glmdenoise.utils.normalisemax import normalisemax
+from glmdenoise.utils.gethrf import getcanonicalhrf
+from glmdenoise.report import Report
+from glmdenoise.defaults import default_params
+from glmdenoise.whiten_data import whiten_data
+from glmdenoise.fit_runs import fit_runs
+from glmdenoise.cross_validate import cross_validate
 from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
 warnings.simplefilter(action="ignore", category=FutureWarning)
-
-
-def R2_nom_denom(y, yhat):
-    """ Calculates the nominator and denomitor for calculating R-squared
-
-    Args:
-        y (array): data
-        yhat (array): predicted data data
-
-    Returns:
-        nominator (float or array), denominator (float or array)
-    """
-    y, yhat = np.array(y), np.array(yhat)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        nom = np.sum((y - yhat) ** 2, axis=0)
-        denom = np.sum(y ** 2, axis=0)  # Kendricks denominator
-    return nom, denom
-
-
-def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
-    """[summary]
-
-    Arguments:
-        data {[type]} -- [description]
-        design {[type]} -- [description]
-
-    Keyword Arguments:
-        extra_regressors {bool} -- [description] (default: {False})
-        poly_degs {[type]} -- [description] (default: {np.arange(5)})
-
-    Returns:
-        [type] -- [description]
-    """
-
-    # whiten data
-    whitened_data = []
-    whitened_design = []
-
-    for i, (y, X) in enumerate(zip(data, design)):
-        polynomials = make_poly_matrix(X.shape[0], poly_degs)
-        if extra_regressors:
-            if extra_regressors[i].any():
-                polynomials = np.c_[polynomials, extra_regressors[i]]
-
-        whitened_design.append(make_project_matrix(polynomials) @ X)
-        whitened_data.append(make_project_matrix(polynomials) @ y)
-
-    return whitened_data, whitened_design
-
-
-@autojit
-def fit_runs(data, design):
-    """Fits a least square of combined runs.
-       The matrix addition is equivalent to concatenating the list of data and the list of
-       design and fit it all at once. However, this is more memory efficient.
-    Arguments:
-        runs {list} -- List of runs. Each run is an TR x voxel sized array
-        DM {list} -- List of design matrices. Each design matrix
-                     is an TR x predictor sizec array
-
-    Returns:
-        [array] -- betas from fit
-    """
-
-    X = np.vstack(design)
-    X = np.linalg.inv(X.T @ X) @ X.T
-
-    betas = 0
-    start_col = 0
-
-    for run in prange(len(data)):
-        n_vols = data[run].shape[0]
-        these_cols = np.arange(n_vols) + start_col
-        betas += X[:, these_cols] @ data[run]
-        start_col += data[run].shape[0]
-
-    return betas
-
-
-def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5)):
-    """[summary]
-
-    Arguments:
-        data {[type]} -- [description]
-        design {[type]} -- [description]
-
-    Keyword Arguments:
-        extra_regressors {bool} -- [description] (default: {False})
-        poly_degs {[type]} -- [description] (default: {np.arange(5)})
-
-    Returns:
-        [type] -- [description]
-    """
-
-    whitened_data, whitened_design = whiten_data(
-        data, design, extra_regressors, poly_degs)
-
-    n_runs = len(data)
-    nom_denom = []
-    betas = []
-    r2_runs = []
-    for run in tqdm(range(n_runs), desc='Cross-validating run'):
-        # fit data using all the other runs
-        mask = np.arange(n_runs) != run
-
-        betas.append(fit_runs(
-            list(compress(whitened_data, mask)),
-            list(compress(whitened_design, mask))))
-
-        # predict left-out run with vanilla design matrix
-        yhat = design[run] @ betas[run]
-
-        y = data[run]
-        # get polynomials
-        polynomials = make_poly_matrix(y.shape[0], poly_degs)
-        # project out polynomials from data and prediction
-        y = make_project_matrix(polynomials) @ y
-        yhat = make_project_matrix(polynomials) @ yhat
-
-        # get run-wise r2s
-        nom, denom = R2_nom_denom(y, yhat)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            r2_runs.append(np.nan_to_num(1 - (nom / denom)))
-
-        nom_denom.append((nom, denom))
-
-    # calculate global R2
-    nom = np.array(nom_denom).sum(0)[0, :]
-    denom = np.array(nom_denom).sum(0)[1, :]
-    with np.errstate(divide="ignore", invalid="ignore"):
-        r2s = np.nan_to_num(1 - (nom / denom))
-    return (r2s, r2_runs, betas)
 
 
 class GLMdenoise():
@@ -157,33 +26,35 @@ class GLMdenoise():
     When it comes for you
     """
 
-    def __init__(self, design, data, params, n_jobs=1, n_pcs=20, n_boots=100):
-        """[summary]
+    def __init__(self, params=None):
+        """GlmDenoise constructor
 
         Arguments:
-            design {[type]} -- [description]
-            data {[type]} -- [description]
-
-        Keyword Arguments:
-            tr {float} -- TR in seconds (default: {2})
-            n_jobs {int} -- [description] (default: {10})
-            n_pcs {int} -- [description] (default: {20})
-            n_boots {int} -- [description] (default: {100})
+            params (dict): Dictionary of parameters. Optional
         """
 
-        self.design = design
-        self.data = data
+        params = params or dict()
+        for key, _ in default_params.items():
+            params[key] = params.get(key) or default_params[key]
+
         self.params = params
-        self.params['n_pcs'] = n_pcs
-        self.tr = params['tr']
         self.extra_regressors = params['extra_regressors']
-        self.n_pcs = n_pcs
-        self.dims = data[0].shape
-        self.n_jobs = n_jobs
-        self.n_boots = n_boots
-        self.n_runs = len(data)
+        self.n_pcs = params['n_pcs']
+        self.n_jobs = params['n_jobs']
+        self.n_boots = params['n_boots']
         self.hrfparams = {}
         self.results = dict()
+
+    def fit(self, design, data, tr):
+
+        self.design = design
+        self.tr = tr
+        self.data = data
+        self.n_runs = len(data)
+
+        stimdur = numpy.median(design[0].duration.values)
+        self.params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
+        self.params['tr'] = tr
 
         # calculate polynomial degrees
         max_poly_deg = int(((data[0].shape[0] * self.tr) / 60) // 2) + 1
@@ -197,7 +68,7 @@ class GLMdenoise():
         self.data = [d[:, self.results['mean_mask']].astype(
             np.float16) for d in self.data]
 
-    def fit(self):
+
         """
         """
         if self.params['hrfmodel'] == 'optimise':
@@ -287,17 +158,17 @@ class GLMdenoise():
         print('Done!')
         # calculate best number of PCs
         self.results['PCA_R2s'] = np.vstack(
-            np.asarray(np.asarray(PCresults)[:, 0]))
+            np.asarray(np.asarray(PCresults)[:, 0])).astype(float)
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
         self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
-        best_mask = np.any(
+        self.best_mask = np.any(
             self.results['PCA_R2s'] > self.params['R2thresh'], 0)
         self.results['xval'] = np.nanmedian(
-            self.results['PCA_R2s'][:, best_mask], 1)
+            self.results['PCA_R2s'][:, self.best_mask], 1)
         select_pca = select_noise_regressors(
             np.asarray(self.results['xval']))
         self.results['select_pca'] = select_pca
-        print(f'Selected {select_pca} number of PCs')
+        print('Selected {} number of PCs'.format(select_pca))
 
         print('Bootstrapping betas (No Denoising).')
         n_runs = len(self.data)
@@ -366,80 +237,122 @@ class GLMdenoise():
 
         print('Calculating overall R2 of final fit...')
 
-        stackdesign = np.vstack(whitened_design)
-        modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
-        self.results['R2s'] = calccodStack(
-            whitened_data,
-            modelfits)
-        """ TO DO
-        self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
-                                  for c_run in range(self.n_runs)]
-        """
+        # The below does not currently work, see #47
+        # stackdesign = np.vstack(whitened_design)
+        # modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
+        # self.results['R2s'] = calccodStack(whitened_data, modelfits)
+        # self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
+        #                           for c_run in range(self.n_runs)]
         print('Done')
 
-    def plot_figures(self):
+    def full_image(self, image):
+        """Return full-sized array of masked version
+        
+        Args:
+            image (ndarray): one or multiple volumes as vectors
+        
+        Returns:
+            ndarray: image vector of same size as mask used
+        """
+
+        mask = self.results['mean_mask']
+        if image.shape[-1] < mask.size:
+            # image is a masked version
+            if len(image.shape) == 1:
+                # one volume
+                full_img = numpy.zeros(mask.shape)
+                full_img[mask] = image
+            elif len(image.shape) == 2:
+                # multiple volumes
+                full_img = numpy.zeros(image.shape[:1] + mask.shape)
+                full_img[:, mask] = image
+            return full_img
+        else:
+            return image
+
+    def plot_figures(self, report=None, spatialdims=None):
+
         # start a new report with figures
-        report = Report()
-        report.spatialdims = self.params['xyzsize']
+        if report is None:
+            report = Report()
+            report.spatialdims = self.params.get('xyzsize') or spatialdims
 
-        # plot solutions
-        title = 'HRF fit'
-        report.plot_hrf(self.hrfparams['hrfseed'],
-                        self.hrfparams['hrf'], self.tr, title)
-        report.plot_image(self.hrfparams['hrffitvoxels'], title)
+        if self.params.get('hrfmodel') == 'optimize':
+            title = 'HRF fit'
+            report.plot_hrf(
+                self.hrfparams['seedhrf'],
+                self.hrfparams['hrf'],
+                self.tr,
+                title
+            )
+            report.plot_image(
+                self.full_image(self.hrfparams['hrffitvoxels']),
+                title
+            )
 
-        for c_run in range(self.n_runs):
+        pca_r2s = self.results['PCA_R2s']
+        for pc in range(self.n_pcs):
             report.plot_scatter_sparse(
                 [
-                    (self.results['PCA_R2s'][0],
-                        self.results['PCA_R2s'][c_run]),
-                    (self.results['PCA_R2s'][0][self.pcvoxels],
-                        self.results['PCA_R2s'][c_run][self.pcvoxels]),
+                    (pca_r2s[0], pca_r2s[pc]),
+                    (pca_r2s[0][self.best_mask], pca_r2s[pc][self.best_mask]),
                 ],
                 xlabel='Cross-validated R^2 (0 PCs)',
-                ylabel='Cross-validated R^2 ({p} PCs)',
-                title='PCscatter{p}',
+                ylabel='Cross-validated R^2 ({} PCs)'.format(pc),
+                title='PCscatter{}'.format(pc),
                 crosshairs=True,
             )
 
         # plot voxels for noise regressor selection
         title = 'Noise regressor selection'
         report.plot_noise_regressors_cutoff(self.results['xval'],
-                                            self.n_pcs,
+                                            self.results['select_pca'],
                                             title='Chosen number of regressors')
-        report.plot_image(self.results['noise_pool_mask'], title)
 
         # various images
-        report.plot_image(self.results['mean_image'], 'Mean volume')
-        report.plot_image(self.results['noise_pool_mask'], 'Noise Pool')
-        report.plot_image(self.results['mean_mask'], 'Noise Exclude')
-        if self.hrfparams['hrffitmask'] != 1:
-            report.plot_image(self.hrfparams['hrffitmask'], 'HRFfitmask')
-        if self.params['pcR2cutoffmask'] != 1:
-            report.plot_image(self.params['pcR2cutoffmask'], 'PCmask')
+        report.plot_image(self.full_image(
+            self.results['mean_image']), 'Mean volume')
+        report.plot_image(self.full_image(
+            self.results['noise_pool_mask']), 'Noise Pool')
+        report.plot_image(self.full_image(
+            self.results['mean_mask']), 'Noise Exclude')
+
+        if self.hrfparams.get('hrffitmask', 1) != 1:
+            report.plot_image(self.full_image(
+                self.hrfparams['hrffitmask']), 'HRFfitmask')
+        if self.params.get('pcR2cutoffmask', 1) != 1:
+            report.plot_image(self.full_image(
+                self.params['pcR2cutoffmask']), 'PCmask')
 
         for pc in range(self.n_pcs):
-            report.plot_image(
-                self.results['PCA_R2s'][pc],
-                'PCcrossvalidation%02d', dtype='range')
-            report.plot_image(
-                self.results['PCA_R2s'][pc],
-                'PCcrossvalidationscaled%02d', dtype='scaled')
+            report.plot_image(self.full_image(
+                self.results['PCA_R2s'][pc]),
+                'PCcrossvalidation{}'.format(pc),
+                dtype='range'
+            )
+            report.plot_image(self.full_image(
+                self.results['PCA_R2s'][pc]),
+                'PCcrossvalidationscaled{}'.format(pc),
+                dtype='scaled'
+            )
 
-        report.plot_image(self.results['R2s'], 'FinalModel')
+        #report.plot_image(self.results['R2s'], 'FinalModel')
         """ TODO
         for r in range(n_runs):
             report.plot_image(
                 self.results['R2srun'][r], 'FinalModel_run%02d')
         """
         # PC weights
-        thresh = np.percentile(
-            np.abs(np.vstack(self.results['PCA_weights']).ravel()), 99)
+        weights_mats = self.results['PCA_weights'].ravel()
+        weights = np.asarray(np.concatenate(weights_mats)).ravel()
+        thresh = np.percentile(np.abs(weights), 99)
         for c_run in range(1, self.n_runs):
-            for pc in range(1, self.n_pcas):
+            for pc in range(1, self.n_pcs):
+                # matrix to array for reshaping:
+                weights = np.asarray(self.results['PCA_weights'][pc][c_run])
                 report.plot_image(
-                    self.results['PCA_weights'][pc][c_run].mean(axis=0),
-                    'PCmap_run%02d_num%02d.png',
+                    self.full_image(weights.mean(axis=0)),
+                    'PCmap_run{}_num{}'.format(c_run, pc),
                     dtype='custom',
                     drange=[-thresh, thresh]
                 )

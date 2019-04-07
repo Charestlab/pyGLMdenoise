@@ -1,10 +1,12 @@
-from glmdenoise import pyGLMdenoise as PYG
+from glmdenoise.pyGlmdenoise import GLMdenoise
+from glmdenoise.io.output import Output
+from glmdenoise.io.input import load_nifti
 from pprint import pprint
 import nibabel
 import pandas
 
 
-def run_files(bold_files, event_files, tr):
+def run_files(bold_files, event_files, tr, out=None):
     """Run glmdenoise on the provided image and event files
 
     Args:
@@ -15,21 +17,16 @@ def run_files(bold_files, event_files, tr):
 
     msg = 'need same number of image and event files'
     assert len(bold_files) == len(event_files), msg
-    data = [nibabel.load(f).get_data() for f in bold_files]
+    if out is None:
+        out = Output()
+    out.configure_from(sample_file=bold_files[0])
+    data = [load_nifti(f) for f in bold_files]
     design = [pandas.read_csv(f, delimiter='\t') for f in event_files]
-    params = {}
-    params['hrf'] = normalisemax(getcanonicalhrf(stimdur, TR))
-    """
-    here we need to fetch the TR from the BIDS files.
-    """
-
-    params['tr'] = 2
-    params['numforhrf'] = 50
-    params['hrfthresh'] = 0.5
-    params['hrffitmask'] = 1
-    params['R2thresh'] = 0
-    params['hrfmodel'] = 'optimise'  # 'assume'
-    params['extra_regressors'] = False
-    gd = PYG.GLMdenoise(design, data, params, n_jobs=2)
-    gd.fit()
-    gd.plot_figures()
+    gd = GLMdenoise(params={'hrfmodel': 'assume'})
+    gd.fit(design, data, tr)
+    gd.plot_figures(out.create_report())
+    for image_name in ['pseudo_t_stats']:
+        image = gd.full_image(gd.results.get(image_name))
+        out.save_image(image, image_name)
+    for var_name in ['xval']:
+        out.save_variable(gd.results.get(var_name), var_name)

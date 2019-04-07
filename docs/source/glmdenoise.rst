@@ -15,11 +15,14 @@ Submodules
 .. toctree::
 
    glmdenoise.console
-   glmdenoise.data
-   glmdenoise.makeimagestack
+   glmdenoise.cross_validate
+   glmdenoise.defaults
+   glmdenoise.fit_runs
+   glmdenoise.pyGlmdenoise
+   glmdenoise.r2_nom_denom
    glmdenoise.report
    glmdenoise.select_noise_regressors
-   glmdenoise.select_voxels_nr_selection
+   glmdenoise.whiten_data
 
 Module contents
 ---------------

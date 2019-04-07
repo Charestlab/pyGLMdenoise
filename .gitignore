@@ -1,9 +1,14 @@
 #
 .vscode/
 
+
+# data folder
+data/
+
 # various output
 figures/
 report.html
+*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
