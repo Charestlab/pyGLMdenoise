@@ -307,8 +307,9 @@ class GLMdenoise():
                 self.results['R2srun'][r], 'FinalModel_run%02d')
         """
         # PC weights
-        thresh = np.percentile(
-            np.abs(np.vstack(self.results['PCA_weights']).ravel()), 99)
+        weights_mats = self.results['PCA_weights'].ravel()
+        weights = np.asarray(np.concatenate(weights_mats)).ravel()
+        thresh = np.percentile(np.abs(weights), 99)
         for c_run in range(1, self.n_runs):
             for pc in range(1, self.n_pcs):
                 # matrix to array for reshaping:
