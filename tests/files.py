@@ -34,6 +34,7 @@ class FilesTests(TestCase):
         from glmdenoise.io.files import run_files
         glmdenoise = GLMdenoise.return_value
         glmdenoise.results.get.side_effect = lambda k: '$' + k
+        glmdenoise.full_image.side_effect = lambda i: i
         out = Mock()
         data1, design1 = Mock(), Mock()
         run_files([data1], [design1], 1.0, out=out)
