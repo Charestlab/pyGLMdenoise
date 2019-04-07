@@ -158,7 +158,7 @@ class GLMdenoise():
         print('Done!')
         # calculate best number of PCs
         self.results['PCA_R2s'] = np.vstack(
-            np.asarray(np.asarray(PCresults)[:, 0]))
+            np.asarray(np.asarray(PCresults)[:, 0])).astype(float)
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
         self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
         self.best_mask = np.any(
@@ -251,6 +251,7 @@ class GLMdenoise():
         if report is None:
             report = Report()
             report.spatialdims = self.params.get('xyzsize') or spatialdims
+        report.mean_mask = self.results['mean_mask']
 
         if self.params.get('hrfmodel') == 'optimize':
             title = 'HRF fit'
