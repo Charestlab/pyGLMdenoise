@@ -25,6 +25,7 @@ class Report(object):
             name (str): Name of figure
         """
         fpath = self.output.save_figure(figure, title)
+        figure.close()
         block_id = self.output.safe_name(title)
         html = f('<h3 id="{block_id}">{title}</h3><img src="{fpath}" />\n')
         self.blocks.append(html)
@@ -112,7 +113,7 @@ class Report(object):
         else:
             full_imgvector = imgvector
         stack = make_image_stack(
-            full_imgvector.reshape(self.spatialdims, order='F')
+            full_imgvector.reshape(self.spatialdims) #, order='F'
         )
         ax.imshow(stack)
         self.add_image(fig, title)
