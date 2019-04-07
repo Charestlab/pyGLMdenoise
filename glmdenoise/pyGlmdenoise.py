@@ -245,13 +245,37 @@ class GLMdenoise():
         #                           for c_run in range(self.n_runs)]
         print('Done')
 
+    def full_image(self, image):
+        """Return full-sized array of masked version
+        
+        Args:
+            image (ndarray): one or multiple volumes as vectors
+        
+        Returns:
+            ndarray: image vector of same size as mask used
+        """
+
+        mask = self.results['mean_mask']
+        if image.shape[-1] < mask.size:
+            # image is a masked version
+            if len(image.shape) == 1:
+                # one volume
+                full_img = numpy.zeros(mask.shape)
+                full_img[mask] = image
+            elif len(image.shape) == 2:
+                # multiple volumes
+                full_img = numpy.zeros(image.shape[:1] + mask.shape)
+                full_img[:, mask] = image
+            return full_img
+        else:
+            return image
+
     def plot_figures(self, report=None, spatialdims=None):
 
         # start a new report with figures
         if report is None:
             report = Report()
             report.spatialdims = self.params.get('xyzsize') or spatialdims
-        report.mean_mask = self.results['mean_mask']
 
         if self.params.get('hrfmodel') == 'optimize':
             title = 'HRF fit'
@@ -261,15 +285,17 @@ class GLMdenoise():
                 self.tr,
                 title
             )
-            report.plot_image(self.hrfparams['hrffitvoxels'], title)
+            report.plot_image(
+                self.full_image(self.hrfparams['hrffitvoxels']),
+                title
+            )
 
+        pca_r2s = self.results['PCA_R2s']
         for pc in range(self.n_pcs):
             report.plot_scatter_sparse(
                 [
-                    (self.results['PCA_R2s'][0],
-                        self.results['PCA_R2s'][pc]),
-                    (self.results['PCA_R2s'][0][self.best_mask],
-                        self.results['PCA_R2s'][pc][self.best_mask]),
+                    (pca_r2s[0], pca_r2s[pc]),
+                    (pca_r2s[0][self.best_mask], pca_r2s[pc][self.best_mask]),
                 ],
                 xlabel='Cross-validated R^2 (0 PCs)',
                 ylabel='Cross-validated R^2 ({} PCs)'.format(pc),
@@ -284,21 +310,31 @@ class GLMdenoise():
                                             title='Chosen number of regressors')
 
         # various images
-        report.plot_image(self.results['mean_image'], 'Mean volume')
-        report.plot_image(self.results['noise_pool_mask'], 'Noise Pool')
-        report.plot_image(self.results['mean_mask'], 'Noise Exclude')
+        report.plot_image(self.full_image(
+            self.results['mean_image']), 'Mean volume')
+        report.plot_image(self.full_image(
+            self.results['noise_pool_mask']), 'Noise Pool')
+        report.plot_image(self.full_image(
+            self.results['mean_mask']), 'Noise Exclude')
+
         if self.hrfparams.get('hrffitmask', 1) != 1:
-            report.plot_image(self.hrfparams['hrffitmask'], 'HRFfitmask')
+            report.plot_image(self.full_image(
+                self.hrfparams['hrffitmask']), 'HRFfitmask')
         if self.params.get('pcR2cutoffmask', 1) != 1:
-            report.plot_image(self.params['pcR2cutoffmask'], 'PCmask')
+            report.plot_image(self.full_image(
+                self.params['pcR2cutoffmask']), 'PCmask')
 
         for pc in range(self.n_pcs):
-            report.plot_image(
-                self.results['PCA_R2s'][pc],
-                'PCcrossvalidation{}'.format(pc), dtype='range')
-            report.plot_image(
-                self.results['PCA_R2s'][pc],
-                'PCcrossvalidationscaled{}'.format(pc), dtype='scaled')
+            report.plot_image(self.full_image(
+                self.results['PCA_R2s'][pc]),
+                'PCcrossvalidation{}'.format(pc),
+                dtype='range'
+            )
+            report.plot_image(self.full_image(
+                self.results['PCA_R2s'][pc]),
+                'PCcrossvalidationscaled{}'.format(pc),
+                dtype='scaled'
+            )
 
         #report.plot_image(self.results['R2s'], 'FinalModel')
         """ TODO
@@ -315,7 +351,7 @@ class GLMdenoise():
                 # matrix to array for reshaping:
                 weights = np.asarray(self.results['PCA_weights'][pc][c_run])
                 report.plot_image(
-                    weights.mean(axis=0),
+                    self.full_image(weights.mean(axis=0)),
                     'PCmap_run{}_num{}'.format(c_run, pc),
                     dtype='custom',
                     drange=[-thresh, thresh]

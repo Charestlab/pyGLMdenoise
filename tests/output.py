@@ -1,6 +1,7 @@
 from unittest import TestCase
 from unittest.mock import Mock, patch
 import numpy
+from numpy.testing import assert_array_equal
 
 
 class OutputTests(TestCase):
@@ -56,7 +57,10 @@ class OutputTests(TestCase):
         from glmdenoise.io.output import Output
         output = Output()
         output.img = Mock()
-        output.img.shape = [2, 3, 4, 10] # xyzt
-        data = numpy.ones([8, 2*3*4])
+        output.img.shape = (2, 3, 4, 10) # xyzt
+        data = numpy.random.rand(8, 2*3*4)
         output.save_image(data, 'my_img')
-        nibabel.Nifti1Image.assert_called_with()
+        assert_array_equal(
+            nibabel.Nifti1Image.call_args[0][0],
+            numpy.moveaxis(data, 0, -1).reshape([2, 3, 4, 8])
+        )

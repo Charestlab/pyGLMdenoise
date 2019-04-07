@@ -3,6 +3,7 @@ import glmdenoise.io.output
 from matplotlib import pyplot as plt
 from ww import f
 import numpy
+from os.path import basename
 
 
 class Report(object):
@@ -25,9 +26,10 @@ class Report(object):
             name (str): Name of figure
         """
         fpath = self.output.save_figure(figure, title)
-        figure.close()
+        fname = basename(fpath)
+        plt.close(figure)
         block_id = self.output.safe_name(title)
-        html = f('<h3 id="{block_id}">{title}</h3><img src="{fpath}" />\n')
+        html = f('<h3 id="{block_id}">{title}</h3><img src="{fname}" />\n')
         self.blocks.append(html)
         self.toc.append(title)
 
@@ -107,13 +109,8 @@ class Report(object):
         # dtype= mask, range, scaled, percentile, custom
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        if imgvector.size < self.mean_mask.size:
-            full_imgvector = numpy.zeros(self.mean_mask.shape)
-            full_imgvector[self.mean_mask] = imgvector
-        else:
-            full_imgvector = imgvector
         stack = make_image_stack(
-            full_imgvector.reshape(self.spatialdims) #, order='F'
+            imgvector.reshape(self.spatialdims) #, order='F'
         )
         ax.imshow(stack)
         self.add_image(fig, title)

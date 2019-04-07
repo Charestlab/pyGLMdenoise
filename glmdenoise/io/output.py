@@ -103,12 +103,16 @@ class Output(object):
         """Store brain image data in a nifti file using nibabel
         
         Args:
-            imageArray (ndarray): data
+            imageArray (ndarray): data in vector form. If multiple volumes,
+                they should be in the first dimension.
             name (str): The name of the variable
         """
         self.ensure_directory()
+        if len(imageArray.shape) == 1:
+            imageArray = imageArray[numpy.newaxis, :]
+        xyzt = self.img.shape[:3] + imageArray.shape[:1]
         img = nibabel.Nifti1Image(
-            imageArray.reshape(self.img.shape[:3]),
+            numpy.moveaxis(imageArray, 0, -1).reshape(xyzt),
             self.img.get_affine(),
             header=self.img.header
         )

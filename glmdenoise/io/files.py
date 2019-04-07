@@ -26,6 +26,7 @@ def run_files(bold_files, event_files, tr, out=None):
     gd.fit(design, data, tr)
     gd.plot_figures(out.create_report())
     for image_name in ['pseudo_t_stats']:
-        out.save_image(gd.results.get(image_name), image_name)
+        image = gd.full_image(gd.results.get(image_name))
+        out.save_image(image, image_name)
     for var_name in ['xval']:
         out.save_variable(gd.results.get(var_name), var_name)
