@@ -12,7 +12,7 @@ class MainClassTest(TestCase):
         socket.gethostname() == 'colles-d1800479',
         'RandomState different on Jaspers workstation'
     )
-    @unittest.skipIf('TRAVIS' in os.environ,
+    @skipIf('TRAVIS' in os.environ,
         'Skipping this test on Travis CI.'
     )
     def test_fit_assume_hrf(self):
