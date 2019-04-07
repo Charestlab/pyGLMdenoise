@@ -1,5 +1,6 @@
 from unittest import TestCase
 from unittest.mock import Mock, patch
+import numpy
 
 
 class OutputTests(TestCase):
@@ -49,3 +50,13 @@ class OutputTests(TestCase):
             output.file_path('bar', 'xyz'),
             '/d/derivatives/glmdenoise/sub-1/sub-1_task-a_bar.xyz'
         )
+
+    @patch('glmdenoise.io.output.nibabel')
+    def test_image(self, nibabel):
+        from glmdenoise.io.output import Output
+        output = Output()
+        output.img = Mock()
+        output.img.shape = [2, 3, 4, 10] # xyzt
+        data = numpy.ones([8, 2*3*4])
+        output.save_image(data, 'my_img')
+        nibabel.Nifti1Image.assert_called_with()

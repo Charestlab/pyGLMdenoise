@@ -108,7 +108,7 @@ class Output(object):
         """
         self.ensure_directory()
         img = nibabel.Nifti1Image(
-            imageArray,
+            imageArray.reshape(self.img.shape[:3]),
             self.img.get_affine(),
             header=self.img.header
         )
