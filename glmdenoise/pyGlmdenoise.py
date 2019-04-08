@@ -68,7 +68,6 @@ class GLMdenoise():
         self.data = [d[:, self.results['mean_mask']].astype(
             np.float16) for d in self.data]
 
-
         """
         """
         if self.params['hrfmodel'] == 'optimise':
@@ -193,6 +192,22 @@ class GLMdenoise():
 
         boot_betas = np.array(boot_betas)
         self.results['vanilla_fit'] = np.median(boot_betas, 0)
+        n_conds = boot_betas.shape[1]
+
+        self.results['vanilla_standard_error'] = np.zeros(
+            (self.results['vanilla_fit'].shape))
+        for cond in range(n_conds):
+            percentiles = np.percentile(
+                boot_betas[:, cond, :], [16, 84], axis=0)
+            self.results['vanilla_standard_error'][cond, :] = (
+                percentiles[1, :] - percentiles[0, :])/2
+
+        self.results['vanilla_poolse'] = np.sqrt(
+            np.mean(self.results['vanilla_standard_error']**2, axis=0))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            self.results['vanilla_pseudo_t_stats'] = np.apply_along_axis(
+                lambda x: x/self.results['vanilla_poolse'], 1, self.results['vanilla_fit'])
+
         print('Done!')
 
         print('Bootstrapping betas (Denoising).')
@@ -247,10 +262,10 @@ class GLMdenoise():
 
     def full_image(self, image):
         """Return full-sized array of masked version
-        
+
         Args:
             image (ndarray): one or multiple volumes as vectors
-        
+
         Returns:
             ndarray: image vector of same size as mask used
         """
@@ -289,6 +304,19 @@ class GLMdenoise():
                 self.full_image(self.hrfparams['hrffitvoxels']),
                 title
             )
+
+        print('saving denoised mean t-map')
+        report.plot_image(
+            self.full_image(np.mean(self.results['pseudo_t_stats'], axis=0)),
+            'denoised mean t-pattern'
+        )
+
+        print('saving non-denoised mean t-map')
+        report.plot_image(
+            self.full_image(
+                np.mean(self.results['vanilla_pseudo_t_stats'], axis=0)),
+            'non-denoised mean t-pattern'
+        )
 
         pca_r2s = self.results['PCA_R2s']
         for pc in range(self.n_pcs):
@@ -336,7 +364,7 @@ class GLMdenoise():
                 dtype='scaled'
             )
 
-        #report.plot_image(self.results['R2s'], 'FinalModel')
+        # report.plot_image(self.results['R2s'], 'FinalModel')
         """ TODO
         for r in range(n_runs):
             report.plot_image(
