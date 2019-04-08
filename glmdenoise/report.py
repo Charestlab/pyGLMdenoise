@@ -4,12 +4,12 @@ from matplotlib import pyplot as plt
 from ww import f
 import numpy
 from os.path import basename
+import seaborn as sns
 
 
 class Report(object):
     """Html report and figures
     """
-
 
     def __init__(self):
         self.blocks = []
@@ -110,9 +110,10 @@ class Report(object):
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
         stack = make_image_stack(
-            imgvector.reshape(self.spatialdims) #, order='F'
+            imgvector.reshape(self.spatialdims)  # , order='F'
         )
-        ax.imshow(stack)
+        sns.heatmap(stack, ax=ax)
+        # ax.imshow(stack)
         self.add_image(fig, title)
 
     def plot_scatter_sparse(self, data, xlabel, ylabel, title, crosshairs=False):

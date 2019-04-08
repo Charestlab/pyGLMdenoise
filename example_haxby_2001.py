@@ -1,3 +1,4 @@
+from glmdenoise import run_bids_directory
 """
 Simple example script on the OpenNeuro Haxby 2001 dataset
 
@@ -7,6 +8,10 @@ requires awscli: `apt install awscli`
 import os
 import json
 from time import sleep
+from datalad import api as datapi
+
+# figure out how to reproduce in a python way
+# datalad install // /openfmri/ds000105
 
 data_uris = {
     '': 's3://openneuro.org/ds000105',
@@ -17,11 +22,12 @@ dataset_dir = os.path.join('data', 'ds000105')
 if not os.path.isdir(dataset_dir):
     os.makedirs(dataset_dir)
     for folder, uri in sorted(data_uris.items()):
-        cmd = 'aws --no-sign-request s3 sync {} data/ds000105{}'.format(uri, folder)
+        cmd = 'aws --no-sign-request s3 sync {} data/ds000105{}'.format(
+            uri, folder)
         print('downloading {}..'.format(folder))
         os.system(cmd)
 
-    ## adapt dataset description to mention fmriprep
+    # adapt dataset description to mention fmriprep
     sleep(0.1)
     desc_file_path = os.path.join(dataset_dir, 'dataset_description.json')
     with open(desc_file_path) as fh:
@@ -37,6 +43,5 @@ else:
     print('found data.')
 
 
-## run pyGLMdenoise on our BIDS dataset:
-from glmdenoise import run_bids_directory
+# run pyGLMdenoise on our BIDS dataset:
 run_bids_directory(dataset_dir)
