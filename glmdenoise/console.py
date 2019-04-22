@@ -1,5 +1,7 @@
 import argparse
-from glmdenoise import run_bids_directory
+import os
+from glmdenoise.io.directory import run_bids_directory
+from glmdenoise.io.public import run_public
 
 
 def main():
@@ -10,11 +12,14 @@ def main():
     """
 
     parser = argparse.ArgumentParser(prog='glmdenoise')
-    parser.add_argument('directory', nargs='?', default='.', 
-        help='Data directory containing BIDS.')
+    parser.add_argument('dataset', nargs='?', default='.', 
+        help='Data directory containing BIDS, or name of public dataset.')
     parser.add_argument('--subject', default=None, 
         help='Subject number. If not specified, will run for each subject.')
     parser.add_argument('--task', default=None, 
         help='Task name. If not specified, will run on all tasks.')
     args = parser.parse_args()
-    run_bids_directory(args.directory, args.subject, args.task)
+    if os.path.isdir(args.dataset):
+        run_bids_directory(args.dataset, args.subject, args.task)
+    else:
+        run_public(args.dataset, args.subject, args.task)
