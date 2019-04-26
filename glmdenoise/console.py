@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--task', default=None, 
         help='Task name. If not specified, will run on all tasks.')
     args = parser.parse_args()
-    if os.path.isdir(args.dataset):
-        run_bids_directory(args.dataset, args.subject, args.task)
-    else:
+    if args.dataset[:3] == '///':
         run_public(args.dataset, args.subject, args.task)
+    else:
+        run_bids_directory(args.dataset, args.subject, args.task)       
