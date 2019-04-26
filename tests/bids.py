@@ -2,7 +2,7 @@ from unittest import TestCase, skip
 from unittest.mock import Mock, patch
 
 
-class DirectoryTests(TestCase):
+class BidsTests(TestCase):
 
     @patch('glmdenoise.io.bids.BIDSLayout')
     def test_match_run_files(self, BIDSLayout):
@@ -20,3 +20,13 @@ class DirectoryTests(TestCase):
         files3, files4 = bids.match_run_files(files3, files4)
         self.assertEqual(files3, ['f3_r1', 'f3_r2', 'f3_r4', 'f3_r6'])
         self.assertEqual(files4, ['f4_r1', 'f4_r2', 'f4_r4', 'f4_r6'])
+
+    @patch('glmdenoise.io.bids.os', 'glmdenoise.io.bids.BIDSLayout')
+    def test_index_inserts_dataset_description(self, BIDSLayout, mockOS):
+        from glmdenoise.io.bids import BidsDirectory
+        layout = BIDSLayout.return_value
+        layout.description = {'BIDSVersion': '-3.0'}
+        mockOS.path.isfile.return_value = False
+        bids = BidsDirectory('/data/project')
+        bids.index()
+        self.fail()
