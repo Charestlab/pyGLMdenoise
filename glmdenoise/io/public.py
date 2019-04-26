@@ -2,9 +2,11 @@
 
 def run_public(dataset, sub=None, task=None):
     """Download dataset by name and denoise it.
+
+    Example: `glmdenoise ///workshops/nih-2017/ds000114`
     
     Args:
-        dataset (str): Name of dataset, e.g. '///openfmri/ds000006'
+        dataset (str): Name of dataset, e.g. '///workshops/nih-2017/ds000114'
         subject (str, optional): BIDS identifier of one subject to run.
             Defaults to None, meaning all subjects.
         task (str, optional): Name of specific task to run.
@@ -23,7 +25,7 @@ def run_public(dataset, sub=None, task=None):
     except ImportError:
         print(reqmsg)
         exit(65)
-    datalad.api.install(source=dataset, path='~/datalad', recursive=True)
+    datalad.api.install(source=dataset, path='~/datalad', recursive=True, get_data=True)
     # get_data=True
     # datalad install -r -s ///labs/gobbini/famface ~/dlfam
     # must generate path with dataset name
