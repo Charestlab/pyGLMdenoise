@@ -2,7 +2,7 @@ from unittest import TestCase, skip
 from unittest.mock import Mock, patch
 
 
-class DirectoryTests(TestCase):
+class BidsTests(TestCase):
 
     @patch('glmdenoise.io.bids.BIDSLayout')
     def test_match_run_files(self, BIDSLayout):
@@ -10,6 +10,7 @@ class DirectoryTests(TestCase):
         layout = BIDSLayout.return_value
         layout.parse_file_entities.side_effect = lambda f: {'run': f[-1]}
         bids = BidsDirectory('')
+        bids.index()
         files1 = ['f1_r1', 'f1_r2', 'f1_r3']
         files2 = ['f2_r1', 'f2_r3']
         files1, files2 = bids.match_run_files(files1, files2)

@@ -18,6 +18,7 @@ def run_bids_directory(directory='.', sub_num=None, sub=None, task=None):
     """
 
     bids = BidsDirectory(directory)
+    bids.index()
     return run_bids(bids, sub_num=sub_num, sub=sub, task=task)
 
 

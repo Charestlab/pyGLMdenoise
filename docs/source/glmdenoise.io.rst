@@ -11,6 +11,7 @@ Submodules
    glmdenoise.io.files
    glmdenoise.io.input
    glmdenoise.io.output
+   glmdenoise.io.public
 
 Module contents
 ---------------
