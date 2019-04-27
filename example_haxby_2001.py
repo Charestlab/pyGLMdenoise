@@ -5,7 +5,6 @@ In principle one could also use
 `glmdenoise.public.run_public('///openneuro/ds000105')`
 but it seems this dataset does not have its derivatives (fmriprep) on datalad.
 
-
 requires awscli: `apt install awscli`
 """
 import os

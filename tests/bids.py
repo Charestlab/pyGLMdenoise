@@ -10,6 +10,7 @@ class BidsTests(TestCase):
         layout = BIDSLayout.return_value
         layout.parse_file_entities.side_effect = lambda f: {'run': f[-1]}
         bids = BidsDirectory('')
+        bids.index()
         files1 = ['f1_r1', 'f1_r2', 'f1_r3']
         files2 = ['f2_r1', 'f2_r3']
         files1, files2 = bids.match_run_files(files1, files2)
@@ -20,13 +21,3 @@ class BidsTests(TestCase):
         files3, files4 = bids.match_run_files(files3, files4)
         self.assertEqual(files3, ['f3_r1', 'f3_r2', 'f3_r4', 'f3_r6'])
         self.assertEqual(files4, ['f4_r1', 'f4_r2', 'f4_r4', 'f4_r6'])
-
-    @patch('glmdenoise.io.bids.os', 'glmdenoise.io.bids.BIDSLayout')
-    def test_index_inserts_dataset_description(self, BIDSLayout, mockOS):
-        from glmdenoise.io.bids import BidsDirectory
-        layout = BIDSLayout.return_value
-        layout.description = {'BIDSVersion': '-3.0'}
-        mockOS.path.isfile.return_value = False
-        bids = BidsDirectory('/data/project')
-        bids.index()
-        self.fail()

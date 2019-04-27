@@ -23,19 +23,20 @@ class BidsDirectory(object):
             self.root,
             derivatives=True,
             ## variant was replaced by desc in the spec
-            ## but our example dataset has not been updated
+            ## but some datasets have not been updated
+            ## and we don't want to include e.g. ICASSO runs
             ignore=[re.compile('_variant-')]
         )
         if self.has_pipeline_with_missing_description('fmriprep'):
             assert not reindexing
             self.insert_pipeline_description('fmriprep')
-            self.index()
+            self.index(reindexing=True)
 
     def has_pipeline_with_missing_description(self, pipeline_name):
-        fmriprep_dir = os.path.join(self.root, 'derivatives', 'fmriprep')
-        fmriprep_desc_file = os.path.join(fmriprep_dir, 'dataset_description.json')
-        if os.path.isdir(fmriprep_dir):
-            return not os.path.isfile(fmriprep_desc_file)
+        pipeline_dir = os.path.join(self.root, 'derivatives', pipeline_name)
+        desc_file = os.path.join(pipeline_dir, 'dataset_description.json')
+        if os.path.isdir(pipeline_dir):
+            return not os.path.isfile(desc_file)
         return False
 
     def insert_pipeline_description(self, pipeline_name):
