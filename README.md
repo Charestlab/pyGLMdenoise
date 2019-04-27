@@ -4,14 +4,21 @@ python implementation of GLMdenoise
 [full documentation](http://glmdenoise.readthedocs.io/)
 
 
+### Installation
+
+```sh
+pip install glmdenoise
+```
+
 ### Usage
 
 ##### Python
 
 ```python
-from glmdenoise import GLMdenoisedata
-
-GLMdenoisedata(design, data, stimdur=0.5, tr=2)
+from glmdenoise import GLMdenoise
+gd = GLMdenoise()
+gd.fit(design, data, tr=2.0)
+gd.plot_figures()
 ```
 
 ##### Console
@@ -20,10 +27,10 @@ GLMdenoisedata(design, data, stimdur=0.5, tr=2)
 glmdenoise /my/data/dir
 ```
 
-### Installation
+##### Public dataset
 
 ```sh
-pip install glmdenoise
+glmdenoise ///workshops/nih-2017/ds000114
 ```
 
 ### Unit tests
