@@ -11,3 +11,5 @@ ww
 numba
 tqdm
 joblib
+datalad
+imageio

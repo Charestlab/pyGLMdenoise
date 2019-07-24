@@ -25,9 +25,15 @@ class Report(object):
         Args:
             name (str): Name of figure
         """
-        fpath = self.output.save_figure(figure, title)
-        fname = basename(fpath)
-        plt.close(figure)
+        if isinstance(figure, str):
+            fpath = figure
+            fname = basename(figure)
+        else:
+            fpath = self.output.save_figure(
+                figure, self.output.safe_name(title))
+            fname = basename(fpath)
+            plt.close(figure)
+
         block_id = self.output.safe_name(title)
         html = f('<h3 id="{block_id}">{title}</h3><img src="{fname}" />\n')
         self.blocks.append(html)
@@ -94,6 +100,13 @@ class Report(object):
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
         self.add_image(fig, title)
 
+    def plot_gif(self, titles, title):
+
+        names = [self.output.safe_name(t) for t in titles]
+        name = self.output.safe_name(title)
+        fpath = self.output.save_gif(names, name)
+        self.add_image(fpath, title)
+
     def plot_image(self, imgvector, title='no title', dtype='mask', drange=None):
         """Plot slices of a 3D image in a grid.
 
@@ -112,8 +125,11 @@ class Report(object):
         stack = make_image_stack(
             imgvector.reshape(self.spatialdims)  # , order='F'
         )
-        sns.heatmap(stack, ax=ax)
-        # ax.imshow(stack)
+        if drange is None:
+            sns.heatmap(stack, ax=ax)
+        else:
+            sns.heatmap(stack, ax=ax, vmin=drange[0], vmax=drange[1])
+            # ax.imshow(stack)
         self.add_image(fig, title)
 
     def plot_scatter_sparse(self, data, xlabel, ylabel, title, crosshairs=False):

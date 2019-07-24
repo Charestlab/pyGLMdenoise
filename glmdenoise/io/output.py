@@ -3,6 +3,7 @@ from os import makedirs
 import nibabel
 import numpy
 import os
+import imageio
 
 
 class Output(object):
@@ -15,7 +16,7 @@ class Output(object):
 
     def configure_from(self, sample_file):
         """Supply one input file to initialize output
-        
+
         Args:
             sample_file (str): Path to nifti file for one run
         """
@@ -28,7 +29,7 @@ class Output(object):
 
     def fit_bids_context(self, bids, sub, ses, task):
         """Provide BIDS context including subject, session and task
-        
+
         Args:
             bids (glmdenoise.io.bids.BidsDirectory): Bids directory object
             sub (str): subject
@@ -56,10 +57,10 @@ class Output(object):
 
     def safe_name(self, name):
         """Remove spaces etc so it can be used as html identifier
-        
+
         Args:
             name (str): Title or name
-        
+
         Returns:
             str: name without special characters
         """
@@ -68,11 +69,11 @@ class Output(object):
 
     def file_path(self, tag, ext):
         """Obtain output file path for the given variable name and extension
-        
+
         Args:
             tag (str): Variable to save
             ext (str): File extension without leading dot
-        
+
         Returns:
             str: Absolute file path for file to save
         """
@@ -89,7 +90,7 @@ class Output(object):
 
     def create_report(self):
         """Return a Report object configured to use this Output object
-        
+
         Returns:
             glmdenoise.report: Report object with methods to create figures
         """
@@ -101,7 +102,7 @@ class Output(object):
 
     def save_image(self, imageArray, name):
         """Store brain image data in a nifti file using nibabel
-        
+
         Args:
             imageArray (ndarray): data in vector form. If multiple volumes,
                 they should be in the first dimension.
@@ -120,7 +121,7 @@ class Output(object):
 
     def save_variable(self, var, name):
         """Store non-brain-image data in a file
-        
+
         Args:
             var: The value to store
             name (str): The name of the variable
@@ -130,7 +131,7 @@ class Output(object):
 
     def save_text(self, text, name, ext):
         """Store text file
-        
+
         Args:
             text (str): string content
             name (str): filename
@@ -142,15 +143,38 @@ class Output(object):
 
     def save_figure(self, figure, name):
         """Save the figure object as a png file
-        
+
         Args:
             figure (matplotlib.figure.Figure): Figure object
             name (str): name of the plot
-        
+
         Returns:
             str: absolute filepath to new png file
         """
         self.ensure_directory()
         fpath = self.file_path(name, 'png')
         figure.savefig(fpath)
+        return fpath
+
+    def save_gif(self, names, gifname):
+        """Save the image_array object as a gif file
+
+        Args:
+            image stack 
+            name (str): name of the gif
+
+        Returns:
+            str: absolute filepath to new gif file
+        """
+        self.ensure_directory()
+        stack = []
+        for name in names:
+            fpath = self.file_path(name, 'png')
+            image_ = imageio.imread(fpath)
+            stack.append(image_)
+
+        fpath = self.file_path(gifname, 'gif')
+
+        kargs = {'fps': 0.5}
+        imageio.mimsave(fpath, stack, 'GIF', **kargs)
         return fpath

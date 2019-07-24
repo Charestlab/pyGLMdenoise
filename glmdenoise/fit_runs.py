@@ -1,10 +1,8 @@
-from numba import autojit, prange
 import numpy as np
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-@autojit
 def fit_runs(data, design):
     """Fits a least square of combined runs.
 
@@ -26,7 +24,7 @@ def fit_runs(data, design):
     betas = 0
     start_col = 0
 
-    for run in prange(len(data)):
+    for run in range(len(data)):
         n_vols = data[run].shape[0]
         these_cols = np.arange(n_vols) + start_col
         betas += X[:, these_cols] @ data[run]
