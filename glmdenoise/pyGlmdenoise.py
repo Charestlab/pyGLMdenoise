@@ -260,6 +260,19 @@ class GLMdenoise():
         #                           for c_run in range(self.n_runs)]
         print('Done')
 
+        print('Calculating SnR...')
+
+        signal = self.results['final_fit'].mean(0)
+        noise = self.results['standard_error'].mean(0)
+        self.results['SNR'] = signal / noise
+
+        signal_vanilla = self.results['vanilla_fit'].mean(0)
+        noise_vanilla = self.results['vanilla_standard_error'].mean(0)
+        self.results['SNR_vanilla'] = signal_vanilla / noise_vanilla
+
+        
+        print('Done')
+
     def full_image(self, image):
         """Return full-sized array of masked version
 
