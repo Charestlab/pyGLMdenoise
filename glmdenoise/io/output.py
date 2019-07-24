@@ -174,5 +174,7 @@ class Output(object):
             stack.append(image_)
 
         fpath = self.file_path(gifname, 'gif')
-        imageio.mimsave(fpath, stack)
+
+        kargs = {'fps': 0.5}
+        imageio.mimsave(fpath, stack, 'GIF', **kargs)
         return fpath

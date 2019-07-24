@@ -270,6 +270,8 @@ class GLMdenoise():
         signal_vanilla = self.results['vanilla_fit'].mean(0)
         noise_vanilla = self.results['vanilla_standard_error'].mean(0)
         self.results['SNR_vanilla'] = signal_vanilla / noise_vanilla
+        self.results['SNR_range'] = [0, np.nanmax(np.concatenate(
+            [self.results['SNR_vanilla'], self.results['SNR']]))]
 
         print('Done')
 
@@ -330,12 +332,12 @@ class GLMdenoise():
 
         print('plotting SNR before and after')
         report.plot_image(
-            self.full_image(np.mean(self.results['SNR'], axis=0)),
-            'SNR after'
+            self.full_image(self.results['SNR']),
+            'SNR after', drange=self.results['SNR_range']
         )
         report.plot_image(
-            self.full_image(np.mean(self.results['SNRbefore'], axis=0)),
-            'SNR before'
+            self.full_image(self.results['SNR_vanilla']),
+            'SNR before', drange=self.results['SNR_range']
         )
         report.plot_gif(['SNR after', 'SNR before'], title='SNR comparison')
 
