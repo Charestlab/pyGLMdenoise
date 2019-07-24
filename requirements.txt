@@ -12,3 +12,4 @@ numba
 tqdm
 joblib
 datalad
+imageio

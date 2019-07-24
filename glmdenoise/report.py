@@ -25,9 +25,14 @@ class Report(object):
         Args:
             name (str): Name of figure
         """
-        fpath = self.output.save_figure(figure, title)
-        fname = basename(fpath)
-        plt.close(figure)
+        if isinstance(figure, str):
+            fpath = figure
+            fname = basename(figure)[:-4]
+        else:
+            fpath = self.output.save_figure(figure, title)
+            fname = basename(fpath)
+            plt.close(figure)
+
         block_id = self.output.safe_name(title)
         html = f('<h3 id="{block_id}">{title}</h3><img src="{fname}" />\n')
         self.blocks.append(html)
@@ -93,6 +98,13 @@ class Report(object):
         ax.set_title(title)
         ax.set(xlabel='# noise regressors', ylabel='Median R2')
         self.add_image(fig, title)
+
+    def plot_gif(self, titles, title):
+
+        names = [self.output.safe_name(t) for t in titles]
+        name = self.output.safe_name(title)
+        fpath = self.output.save_gif(self, names, name)
+        self.add_image(fpath, title)
 
     def plot_image(self, imgvector, title='no title', dtype='mask', drange=None):
         """Plot slices of a 3D image in a grid.

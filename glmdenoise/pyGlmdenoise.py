@@ -1,3 +1,4 @@
+import imageio
 import numpy as np
 import numpy
 from tqdm import tqdm
@@ -270,7 +271,6 @@ class GLMdenoise():
         noise_vanilla = self.results['vanilla_standard_error'].mean(0)
         self.results['SNR_vanilla'] = signal_vanilla / noise_vanilla
 
-        
         print('Done')
 
     def full_image(self, image):
@@ -327,6 +327,17 @@ class GLMdenoise():
             self.results['noise_pool_mask']), 'Noise Pool')
         report.plot_image(self.full_image(
             self.results['mean_mask']), 'Noise Exclude')
+
+        print('plotting SNR before and after')
+        report.plot_image(
+            self.full_image(np.mean(self.results['SNR'], axis=0)),
+            'SNR after'
+        )
+        report.plot_image(
+            self.full_image(np.mean(self.results['SNRbefore'], axis=0)),
+            'SNR before'
+        )
+        report.plot_gif(['SNR after', 'SNR before'], title='SNR comparison')
 
         print('plotting denoised mean t-map')
         report.plot_image(
