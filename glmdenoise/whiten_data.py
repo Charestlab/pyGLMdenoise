@@ -5,7 +5,7 @@ import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
+def whiten_data(data, design, extra_regressors=False, poly_degs=None):
     """[summary]
 
     Arguments:
@@ -19,6 +19,8 @@ def whiten_data(data, design, extra_regressors=False, poly_degs=np.arange(5)):
     Returns:
         [type] -- [description]
     """
+    if poly_degs is None:
+        poly_degs = np.arange(5)
 
     # whiten data
     whitened_data = []

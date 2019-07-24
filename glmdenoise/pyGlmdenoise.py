@@ -287,6 +287,7 @@ class GLMdenoise():
 
     def plot_figures(self, report=None, spatialdims=None):
 
+        print('preparing output figures and report document')
         # start a new report with figures
         if report is None:
             report = Report()
@@ -305,19 +306,29 @@ class GLMdenoise():
                 title
             )
 
-        print('saving denoised mean t-map')
+        # various images
+        print('plotting mean epi')
+        report.plot_image(self.full_image(
+            self.results['mean_image']), 'Mean volume')
+        report.plot_image(self.full_image(
+            self.results['noise_pool_mask']), 'Noise Pool')
+        report.plot_image(self.full_image(
+            self.results['mean_mask']), 'Noise Exclude')
+
+        print('plotting denoised mean t-map')
         report.plot_image(
             self.full_image(np.mean(self.results['pseudo_t_stats'], axis=0)),
             'denoised mean t-pattern'
         )
 
-        print('saving non-denoised mean t-map')
+        print('plotting non-denoised mean t-map')
         report.plot_image(
             self.full_image(
                 np.mean(self.results['vanilla_pseudo_t_stats'], axis=0)),
             'non-denoised mean t-pattern'
         )
 
+        print('plotting PCAs scatterplots')
         pca_r2s = self.results['PCA_R2s']
         for pc in range(self.n_pcs):
             report.plot_scatter_sparse(
@@ -331,19 +342,12 @@ class GLMdenoise():
                 crosshairs=True,
             )
 
+        print('plotting noise-regressors selection')
         # plot voxels for noise regressor selection
         title = 'Noise regressor selection'
         report.plot_noise_regressors_cutoff(self.results['xval'],
                                             self.results['select_pca'],
                                             title='Chosen number of regressors')
-
-        # various images
-        report.plot_image(self.full_image(
-            self.results['mean_image']), 'Mean volume')
-        report.plot_image(self.full_image(
-            self.results['noise_pool_mask']), 'Noise Pool')
-        report.plot_image(self.full_image(
-            self.results['mean_mask']), 'Noise Exclude')
 
         if self.hrfparams.get('hrffitmask', 1) != 1:
             report.plot_image(self.full_image(
@@ -352,6 +356,7 @@ class GLMdenoise():
             report.plot_image(self.full_image(
                 self.params['pcR2cutoffmask']), 'PCmask')
 
+        print('plotting PCA maps')
         for pc in range(self.n_pcs):
             report.plot_image(self.full_image(
                 self.results['PCA_R2s'][pc]),

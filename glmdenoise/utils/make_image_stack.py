@@ -1,6 +1,7 @@
 import numpy as np
 from math import floor, ceil
 
+
 def make_image_stack(m):
     """make image stack from 3D volume
     <m> is a 3D matrix.  if more than 3D, we reshape to be 3D.
@@ -48,7 +49,7 @@ def make_image_stack(m):
     ci = 0
     ri = 0
     for plane in range(chunksize):
-        flatmap[ri : ri + tnrows, ci : ci + tncols] = mchunk[:, :, plane]
+        flatmap[ri: ri + tnrows, ci: ci + tncols] = mchunk[:, :, plane]
         ri += tnrows
         # if we have filled rows rows, change column
         # and reset r
