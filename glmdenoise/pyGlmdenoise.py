@@ -53,8 +53,9 @@ class GLMdenoise():
         self.data = data
         self.n_runs = len(data)
 
-        stimdur = numpy.median(design[0].duration.values)
-        self.params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
+        if 'hrf' not in self.params:
+            stimdur = numpy.median(design[0].duration.values)
+            self.params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
         self.params['tr'] = tr
 
         # calculate polynomial degrees
