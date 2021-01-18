@@ -31,7 +31,7 @@ def findtailthreshold(v, figpath=None):
 
      example:
      from numpy.random import randn
-     f, mns, sds, gmfit = findtailthreshold(np.r_[randn(1000), 5+3*randn(500)])
+     f, mns, sds, gmfit = findtailthreshold(np.r_[randn(1000), 5+3*randn(500)], figpath='test.png')
     """
 
     # internal constants
@@ -43,6 +43,8 @@ def findtailthreshold(v, figpath=None):
     # inputs
     if figpath is None:
         wantfig = 0
+    else:
+        wantfig = 1
 
     # quick massaging of input
     v = v[np.isfinite(v)]
