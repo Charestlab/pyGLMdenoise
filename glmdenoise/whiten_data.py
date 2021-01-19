@@ -1,6 +1,7 @@
 
 import numpy as np
-from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
+from glmdenoise.utils.make_poly_matrix import (make_poly_matrix,
+                                               make_project_matrix)
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 

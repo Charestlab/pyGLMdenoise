@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf, getcanonicalhrflibrary
@@ -7,6 +8,11 @@ from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.cross_validate import cross_validate
 import matplotlib.pyplot as plt
 from glmdenoise.utils.make_image_stack import make_image_stack
+from glmdenoise.utils.optimiseHRF import convolveDesign
+from glmdenoise.utils.findtailthreshold import findtailthreshold
+
+
+dir0 = os.path.dirname(os.path.realpath(__file__))
 
 
 def GLMestimatesingletrial(
@@ -14,7 +20,7 @@ def GLMestimatesingletrial(
         data,
         stimdur,
         tr,
-        outputdir='GLMestimatesingletrialoutputs',
+        outputdir=None,
         opt=None
         ):
     """
@@ -318,20 +324,16 @@ def GLMestimatesingletrial(
             design[p].shape[1],
             numcond,
             err_msg=condmsg)
-        design[p] = np.full(design[p])
+        # if the design happened to be a sparse?
+        # design[p] = np.full(design[p])
 
     # massage <data> and sanity-check it
     if type(data) is not list:
         data = [data]
 
+    # make sure it is single
     for p in range(len(data)):
-        if data[p].dtype is not np.float32:
-            printf(
-                f'WARNING: Converting data in run {p}'
-                'to single format (consider doing this'
-                'before the function call to reduce'
-                'memory usage).\n')
-        data[p] = data[p].astype(np.float32)
+        data[p] = data[p].astype(np.float32, copy=False)
 
     np.testing.assert_equal(
         np.all(np.isfinite(data[0].flatten())),
@@ -347,32 +349,35 @@ def GLMestimatesingletrial(
 
     # calc
     numruns = len(design)
-    is3d = data[0].shape[3] > 1  # is this the X Y Z T case?
-    if not is3d:
+    is3d = data[0].ndim > 2  # is this the X Y Z T case?
+    if is3d:
+        x, y, z, _ = data[0].shape
         for p in range(len(data)):
             data[p] = np.moveaxis(data[p], -1, 0)
             data[p] = data[p].reshape([data[p].shape[0], -1])
-            # force to XYZ x 1 x 1 x T for convenience
-            data[p] = np.moveaxis(data[p], -1, 0)  # back to vox by T
 
-    dimdata = 0  # how many of the first dimensions have data
-    dimtime = 1  # the dimension with time points
-    numvoxels = data.shape[dimdata]
+    else:
+        print('assuming that your data has shape nfeatures x nconditions')
+
+    dimdata = 1  # how many of the first dimensions have data
+    dimtime = 0  # the dimension with time points
+    numvoxels = data[0].shape[dimdata]
+    nx = numvoxels
 
     # check number of time points and truncate if necessary
     for p in range(len(data)):
-        if data[p].shape[1] > design[p].shape[0]:
+        if data[p].shape[dimtime] > design[p].shape[0]:
             print(
                 f'WARNING: run {p} has more time points'
                 'in <data> than <design>. We are truncating'
                 '<data>.\n')
-            data[p] = data[p][:, range(design.shape[0])
+            data[p] = data[p][:, range(design.shape[0])]
 
-        if data[p].shape[1] < design[p].shape[0]:
+        if data[p].shape[dimtime] < design[p].shape[0]:
             print(
-            f'WARNING: run {p} has more time points in <design>'
-            'than <data>. We are truncating <design>.\n')
-            design[p] = design[p][range(data[p].shape[0], :]
+                f'WARNING: run {p} has more time points in <design>'
+                'than <data>. We are truncating <design>.\n')
+            design[p] = design[p][range(data[p].shape[0]), :]
 
     # inputs
     if opt is None:
@@ -393,7 +398,7 @@ def GLMestimatesingletrial(
     if 'xvalscheme' not in opt:
         opt['xvalscheme'] = range(numruns)
 
-    if 'sessionindicator' no in opt:
+    if 'sessionindicator' not in opt:
         opt['sessionindicator'] = np.ones((1, numruns))
 
     if 'wantfileoutputs' not in opt:
@@ -403,44 +408,43 @@ def GLMestimatesingletrial(
         opt['wantmemoryoutputs'] = [0, 0, 0, 1]
 
     if 'extraregressors' not in opt:
-        opt['extraregressors'] = [] # IC deal with this later
+        opt['extraregressors'] = []  # IC deal with this later
 
     if 'maxpolydeg' not in opt:
-        opt['maxpolydeg'] = np.zeros((numruns))
-        for p in range(numruns):
-            opt['maxpolydeg'][p] = round(((data[p].shape(dimtime)*tr)/60)/2)
+        opt['maxpolydeg'] = [round(
+            ((data[p].shape[dimtime]*tr)/60)/2) for p in range(numruns)]
 
-    if 'wantpercentbold' is not in opt:
+    if 'wantpercentbold' not in opt:
         opt['wantpercentbold'] = 1
 
     if 'hrftoassume' not in opt:
-        opt['hrftoassume'] = normalizemax(getcanonicalhrf(stimdur, tr))
+        opt['hrftoassume'] = normalisemax(getcanonicalhrf(stimdur, tr))
 
     if 'hrflibrary' not in opt:
-        opt['hrflibrary'] = getcanonicalhrflibrary(stimdur, tr)
+        opt['hrflibrary'] = getcanonicalhrflibrary(stimdur, tr).T
 
-    if 'wantlss' is not in opt:
+    if 'wantlss' not in opt:
         opt['wantlss'] = 0
 
-    if 'numpcstotry' is not in opt:
+    if 'numpcstotry' not in opt:
         opt['numpcstotry'] = 10
 
-    if 'brainthresh' is not in opt:
+    if 'brainthresh' not in opt:
         opt['brainthresh'] = [99, 0.1]
 
-    if 'brainR2' is not in opt:
+    if 'brainR2' not in opt:
         opt['brainR2'] = []
 
-    if 'brainexclude' is not in opt:
+    if 'brainexclude' not in opt:
         opt['brainexclude'] = 0
 
-    if 'pcR2cutoff' is not in opt:
+    if 'pcR2cutoff' not in opt:
         opt['pcR2cutoff'] = []
 
-    if 'pcR2cutoffmask' is not in opt:
+    if 'pcR2cutoffmask' not in opt:
         opt['pcR2cutoffmask'] = 1
 
-    if 'pcstop' is not in opt:
+    if 'pcstop' not in opt:
         opt['pcstop'] = 1.05
 
     if 'fracs' not in opt:
@@ -451,27 +455,33 @@ def GLMestimatesingletrial(
 
     # deal with length issues and other miscellaneous things
     if type(opt['maxpolydeg']) is int:
-        opt['maxpolydeg'] = np.tile(opt['maxpolydeg'], numruns)
+        opt['maxpolydeg'] = np.tile(opt['maxpolydeg'], numruns).tolist()
 
-    opt['hrftoassume'] = normalizemax(opt['hrftoassume'])
-    opt['hrflibrary'] = normalizemax(opt['hrflibrary'], 1)
+    opt['hrftoassume'] = normalisemax(opt['hrftoassume'])
+    opt['hrflibrary'] = normalisemax(opt['hrflibrary'], 0)
     opt['fracs'] = np.unique(opt['fracs'])[::-1]
     np.testing.assert_equal(
-        np.all(opt['fracs']>0),
+        np.all(opt['fracs'] > 0),
         True,
         err_msg='fracs must be greater than 0')
 
     np.testing.assert_equal(
-        np.all(opt['fracs']<=1),
+        np.all(opt['fracs'] <= 1),
         True,
         err_msg='fracs must be less than or equal to 1')
 
-    if outpurdir is not None:
+    if outputdir is not None:
         wantfig = 1  # if outputdir is not None, we want figures
 
     # deal with output directory
-    if outputdir is not None:
+    if outputdir is None:
+        cwd = os.getcwd()
+        outputdir = os.path.join(cwd, 'GLMestimatesingletrialoutputs')
+
+    if os.path.exists(outputdir):
         os.removedirs(outputdir)
+        os.makedirs(outputdir)
+    else:
         os.makedirs(outputdir)
 
     if np.any(opt['wantfileoutputs']):
@@ -486,11 +496,11 @@ def GLMestimatesingletrial(
         opt['hrflibrary'] = opt['hrftoassume']
 
     # calc
-    nx, ny, nz, _ = data[0].shape
     nh = opt['hrflibrary'].shape[1]
 
     # figure out chunking scheme
-    chunks = chunking(range(nx),np.ceil(nx/np.ceil(numvoxels/opt['chunknum'])))
+    chunks = ch(
+        range(nx), int(np.ceil(nx/np.ceil(numvoxels/opt['chunknum']))))
 
     # deal with special cases
     if opt['wantglmdenoise'] == 1:
@@ -502,15 +512,15 @@ def GLMestimatesingletrial(
             True,
             err_msg=errm)
 
-    if opt['wantfracridge']==1:
+    if opt['wantfracridge'] == 1:
         np.testing.assert_equal(
-            opt['wantfileoutputs'][3]==1 or opt['wantmemoryoutputs'][3]==1,
+            opt['wantfileoutputs'][3] == 1 or opt['wantmemoryoutputs'][3] == 1,
             True,
             err_msg='<wantfracridge> is 1, but you did not request type D')
 
     if opt['wantlss'] == 1:
         np.testing.assert_equal(
-            opt['wantfileoutputs'][1]==1 or opt['wantmemoryoutputs'][1]==1,
+            opt['wantfileoutputs'][1] == 1 or opt['wantmemoryoutputs'][1] == 1,
             True
             err_msg='<wantlss> is 1, but you did not request type B')
 
@@ -558,10 +568,9 @@ def GLMestimatesingletrial(
                 stimorder.append(temp[0])
                 run_validcolumns.append(cnt)
                 cnt += 1
-        valid_columns.append(run_validcolumns)
+        validcolumns.append(run_validcolumns)
 
         stimix.append(np.asarray(stimorder)[np.asarray(run_validcolumns)])
-
 
     # FIT TYPE-A MODEL [ON-OFF]
 
@@ -574,25 +583,25 @@ def GLMestimatesingletrial(
 
     # collapse all conditions and fit
     print('*** FITTING TYPE-A MODEL (ONOFF) ***\n')
-    design0 = [np.sum(x,axis=1) for x in design]
+    design0 = [np.sum(x, axis=1) for x in design]
 
+    # convolve the single design with the hrf
     convdes = []
     for run_i, run in enumerate(design0):
-        n_times = data[run_i].shape[-1]
-        X = make_design(run, tr,
-                        n_times, opt['hrftoassume'])
-        convdes.append(X)
-    # calculate polynomial degrees
-    max_poly_deg = int(((data[0].shape[0] * tr) / 60) // 2) + 1
-    poly_degs = np.arange(max_poly_deg)
+        X = convolveDesign(run, opt['hrftoassume'])
+        convdes.append(X[:, np.newaxis])
+
     results0 = {}
     onoffR2 = cross_validate(
-        data, design, opt['extra_regressors'], poly_degs=poly_degs)[0]
+        data,
+        convdes,
+        opt['extraregressors'],
+        poly_degs=range(opt['maxpolydeg'][p]))[0]
     meanvol = np.vstack(data).mean(0)
 
     # save to disk if desired
-    if opt['wantfileoutputs'][whmodel]==1:
-        file0 = os.path.join(outputdir,'TYPEA_ONOFF.npy')
+    if opt['wantfileoutputs'][whmodel] == 1:
+        file0 = os.path.join(outputdir, 'TYPEA_ONOFF.npy')
         print(f'*** Saving results to {file0}. ***\n')
         np.save(file0, onoffR2, meanvol)
 
@@ -601,44 +610,53 @@ def GLMestimatesingletrial(
         """ TODO
           port normalizerange.m and add to makeimstack
         """
-        plt.imshow(makeimagestack(onoffR2), cmap='hot')
+        plt.imshow(
+            make_image_stack(np.reshape(onoffR2, [x, y, z])), cmap='hot')
         plt.colorbar()
-        plt.savefig(os.path.join(outputdir,'onoffR2.png')))
-        plt.imshow(makeimagestack(meanvol), cmap='gray')
+        plt.savefig(os.path.join(outputdir, 'onoffR2.png'))
+        plt.close('all')
+        plt.imshow(
+            make_image_stack(np.reshape(meanvol, [x, y, z])), cmap='gray')
         plt.colorbar()
-        plt.savefig(os.path.join(outputdir,'meanvol.png')))
+        plt.savefig(os.path.join(outputdir, 'meanvol.png'))
 
     # preserve in memory if desired, and then clean up
-    if opt['wantmemoryoutputs'][whmodel]==1:
-        results = ON-OFF{}
-        results['ON-OFF']['onoffR2'] = onoffR2
-        results['ON-OFF']['meanvol'] = meanvol
+    if opt['wantmemoryoutputs'][whmodel] == 1:
+        results = {}
+        results['onoffR2'] = onoffR2
+        results['meanvol'] = meanvol
 
     # DETERMINE THRESHOLDS
     if wantfig:
-        thresh = findtailthreshold(onoffR2.flatten(), os.path.join(outputdir,'onoffR2hist.png'))
+        thresh = findtailthreshold(
+            onoffR2.flatten(),
+            os.path.join(outputdir, 'onoffR2hist.png'))[0]
     else:
-        thresh = findtailthreshold(onoffR2.flatten())
-   
+        thresh = findtailthreshold(onoffR2.flatten())[0]
+
     if 'brainR2' is not in opt:
-        opt['brainR2'] = thresh    
-    
+        opt['brainR2'] = thresh
+
     if 'pcR2cutoff' is not in opt:
-        opt['pcR2cutoff'] = thresh  
+        opt['pcR2cutoff'] = thresh
 
     # FIT TYPE-B MODEL [FITHRF]
 
     # The approach:
     # (1) Fit single trials.
-    # (2) Evaluate the library of HRFs (or the single assumed HRF). Choose based on R2 for each voxel.
+    # (2) Evaluate the library of HRFs (or the single assumed HRF).
+    #     Choose based on R2 for each voxel.
 
-    # if the user does not want file output nor memory output AND if the number of HRFs to choose
+    # if the user does not want file output nor memory output AND
+    # if the number of HRFs to choose
     # from is just 1, we can short-circuit this whole endeavor!
-    if opt['wantfileoutputs'][1]==0 and opt['wantmemoryoutputs'][1]==0 and opt['hrflibrary'].shape[1]==1:
+    if opt['wantfileoutputs'][1] == 0 and \
+            opt['wantmemoryoutputs'][1] == 0 and \
+            opt['hrflibrary'].shape[1] == 1:
 
         # short-circuit all of the work
-        HRFindex = np.ones((nx,ny,nz))  # easy peasy
-      
+        HRFindex = np.ones((nx, ny, nz))  # easy peasy
+
     else:
 
         # define
@@ -654,24 +672,31 @@ def GLMestimatesingletrial(
 
         # loop over chunks
         print('*** FITTING TYPE-B MODEL (FITHRF) ***\n')
-        for z in range(len(chunks)):
+        for z in chunks:
             print(f'working on chunk {z} of {len(chunks)}.\n')
 
-            data_chunk = [dat[chunks[z], :, :, :] for dat in data]
-            
+            data_chunk = [dat[:, z] for dat in data]
 
             # do the fitting and accumulate all the betas
             # someX x Y x Z x trialbetas x HRFs
-            modelmd0 = np.zeros((len(chunks[z]),ny,nz,numtrials,nh)).astype(np.float32)
 
             FitHRFR2_t = []
             FitHRFR2run_t = []
-            betas_t = []            
-            for p in range(opt['hrflibrary'].shape[1]:
-                
-                results_t = cross_validate(data_chunk, designSINGLE, opt['extra_regressors'], poly_degs=poly_degs)
+            betas_t = []
+            for p in range(opt['hrflibrary'].shape[1]):
 
-                
+                # convolve single design with current hrf
+                current_hrf = opt['hrflibrary'][:, p]
+                conv_designSINGLE = [convolveDesign(
+                    X, current_hrf) for X in designSINGLE]
+
+                results_t = cross_validate(
+                    data_chunk,
+                    conv_designSINGLE,
+                    opt['extraregressors'],
+                    poly_degs=range(opt['maxpolydeg'][0]))
+
+
                 FitHRFR2_t.append(results_t[0])
                 FitHRFR2run_t.append(results_t[1])
                 betas_t.append(results_t[2])
@@ -728,7 +753,7 @@ def GLMestimatesingletrial(
                       goodix = np.where(HRFindex[chunks[z],:,:]==hh).flatten()
                   
                       # extract the data we want to process.
-                      
+                      data0 = [dat[chunks[z][goodix, ]]]
                       data0 = cellfun(@(x) subscript(squish(x(chunks{z},:,:,:),3),{goodix ':'}),data,'UniformOutput',0);
                     
                       % calculate the corresponding indices relative to the full volume

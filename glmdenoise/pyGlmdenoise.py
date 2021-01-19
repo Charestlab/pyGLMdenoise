@@ -15,7 +15,8 @@ from glmdenoise.defaults import default_params
 from glmdenoise.whiten_data import whiten_data
 from glmdenoise.fit_runs import fit_runs
 from glmdenoise.cross_validate import cross_validate
-from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
+from glmdenoise.utils.make_poly_matrix import (make_poly_matrix,
+                                               make_project_matrix)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 

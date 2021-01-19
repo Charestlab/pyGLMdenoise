@@ -280,8 +280,8 @@ def olsmatrix(X):
         )
         f = np.zeros((X.shape[1], X.shape[0]))
         X = np.mat(X)
-        f[good, :] = np.linalg.inv(
-            X[:, good].T  @ X[:, good]) @ X[:, good].T
+            f[good, :] = np.linalg.inv(
+                X[:, good].T  @ X[:, good]) @ X[:, good].T
 
     else:
         X = np.mat(X)
@@ -300,10 +300,18 @@ def convolveDesign(X, hrf):
     Returns:
         [convdes]: 2D: Samples by cond
     """
-    ntime, ncond = X.shape
-    convdes = np.asarray([np.convolve(X[:, x], hrf) for x in range(ncond)]).T
+    ndims = X.ndim
+    if ndims == 1:
+        ntime = X.shape[0]
+        convdes = np.convolve(X, hrf)
+        convdes = convdes[range(ntime)]
+    else:
+        ntime, ncond = X.shape
+        convdes = np.asarray(
+            [np.convolve(X[:, x], hrf) for x in range(ncond)]).T
+        convdes = convdes[range(ntime), :]
 
-    return convdes[0:ntime, :]
+    return convdes
 
 
 def optimiseHRF(

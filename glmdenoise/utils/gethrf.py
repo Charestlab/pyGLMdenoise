@@ -1,5 +1,9 @@
+import os
 import numpy as np
 from scipy.interpolate import pchip
+
+
+fpath = os.path.dirname(os.path.realpath(__file__))
 
 
 def getcanonicalhrf(duration, tr):
@@ -35,3 +39,55 @@ def basichrf():
     return hrf
 
 
+def getcanonicalhrflibrary(duration, tr):
+    """
+     function hrfs = getcanonicalhrflibrary(duration,tr)
+
+     <duration> is the duration of the stimulus in seconds.
+       should be a multiple of 0.1 (if not, we round to the nearest 0.1).
+       0 is automatically treated as 0.1.
+     <tr> is the TR in seconds.
+
+     generate a library of 20 predicted HRFs to a stimulus of
+     duration <duration>, with data sampled at a TR of <tr>.
+
+     the resulting HRFs are returned as 20 x time. the first point is
+     coincident with stimulus onset. each HRF is normalized such
+     that the maximum value is one.
+
+     example:
+     hrfs = getcanonicalhrflibrary(4,1);
+     figure; plot(0:size(hrfs,2)-1,hrfs,'o-');
+    """
+
+    # inputs
+    if duration == 0:
+        duration = 0.1
+    
+    # load the library
+    hrfs = np.genfromtxt(os.path.join(fpath, 'getcanonicalhrflibrary.tsv')).T
+
+    # 20 HRFs x 501 time points
+
+    # convolve to get the predicted response to the desired stimulus duration
+    trold = 0.1
+    hrfsc = []
+    for x in hrfs:
+        hrfsc.append(
+            np.convolve(
+                x,
+                np.ones(int(np.max([1, np.round(duration/trold)])))))
+
+    sampler = np.asarray(np.arange(0, int((hrfsc[0].shape[0]-1)*trold), tr))
+
+    # resample to desired TR
+    hrfsc = [pchip(
+            np.asarray(range(x.shape[0]))*trold,
+            x)(sampler) for x in hrfsc]
+
+    hrfs = np.vstack(hrfsc)
+
+    # make the peak equal to one
+    hrfs = hrfs / np.max(hrfs)
+
+    return hrfs
