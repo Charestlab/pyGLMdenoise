@@ -85,4 +85,4 @@ gd.fit()
 fit_dur = format_time(time.time()-start)
 print('Fit took {}!'.format(fit_dur)
 
-gd.plot_figures()
+gd.plot_figures(spatialdims=dims[:3])
