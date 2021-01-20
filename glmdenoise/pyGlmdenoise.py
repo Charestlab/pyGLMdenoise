@@ -264,11 +264,11 @@ class GLMdenoise():
             whitened_design, whitened_data)]
         # calculate run-wise fit
 
-        self.results['R2s'] = calccodStack(self.data, modelfits)
+        self.results['R2s'] = calccodStack(whitened_data, modelfits)
         self.results['R2runs'] = [calccod(
             cdata,
             mfit,
-            0, 0, 0) for cdata, mfit in zip(self.data, modelfits)]
+            0, 0, 0) for cdata, mfit in zip(whitened_data, modelfits)]
         print('Done')
 
         print('Calculating SnR...')
@@ -405,13 +405,23 @@ class GLMdenoise():
                 dtype='scaled'
             )
 
-        # report.plot_image(self.results['R2s'], 'FinalModel')
-        """ TODO
-        for r in range(n_runs):
+        print('plotting R2 final')
+        report.plot_image(
+            self.full_image(
+                self.results['R2s']),
+            'R2'
+        )
+
+        print('plotting R2 run-wise')
+        for r in range(self.n_runs):
             report.plot_image(
-                self.results['R2srun'][r], 'FinalModel_run%02d')
-        """
+                self.full_image(
+                    self.results['R2runs'][r]),
+                'R2run_{}'.format(r)
+            )
+
         # PC weights
+        print('plotting PC weights')
         weights_mats = self.results['PCA_weights'].ravel()
         weights = np.asarray(np.concatenate(weights_mats)).ravel()
         thresh = np.percentile(np.abs(weights), 99)
@@ -426,6 +436,7 @@ class GLMdenoise():
                     drange=[-thresh, thresh]
                 )
 
+        print('saving html report')
         # stores html report
         report.save()
 
