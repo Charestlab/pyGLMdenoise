@@ -6,7 +6,11 @@ import warnings
 from joblib import Parallel, delayed
 from sklearn.preprocessing import normalize
 from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.optimiseHRF import mtimesStack, olsmatrix, optimiseHRF
+from glmdenoise.utils.optimiseHRF import (mtimesStack,
+                                          olsmatrix,
+                                          optimiseHRF,
+                                          calccod,
+                                          calccodStack)
 from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf
@@ -15,7 +19,8 @@ from glmdenoise.defaults import default_params
 from glmdenoise.whiten_data import whiten_data
 from glmdenoise.fit_runs import fit_runs
 from glmdenoise.cross_validate import cross_validate
-from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
+from glmdenoise.utils.make_poly_matrix import (make_poly_matrix,
+                                               make_project_matrix)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -255,11 +260,15 @@ class GLMdenoise():
         print('Calculating overall R2 of final fit...')
 
         # The below does not currently work, see #47
-        # stackdesign = np.vstack(whitened_design)
-        # modelfits = mtimesStack(olsmatrix(stackdesign), whitened_data)
-        # self.results['R2s'] = calccodStack(whitened_data, modelfits)
-        # self.results['R2runs'] = [calccod(whitened_data[c_run], modelfits[c_run], 0)
-        #                           for c_run in range(self.n_runs)]
+        modelfits = [((olsmatrix(x) @ y).T @ x.T).T for x, y in zip(
+            whitened_design, whitened_data)]
+        # calculate run-wise fit
+
+        self.results['R2s'] = calccodStack(self.data, modelfits)
+        self.results['R2runs'] = [calccod(
+            cdata,
+            mfit,
+            0, 0, 0) for cdata, mfit in zip(self.data, modelfits)]
         print('Done')
 
         print('Calculating SnR...')

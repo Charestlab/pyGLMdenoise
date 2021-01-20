@@ -94,7 +94,7 @@ def constructStimulusMatrix(v, prenumlag, postnumlag, wantwrap=0):
     return f
 
 
-def calccod(x, y, wantgain=0, wantmeansub=1):
+def calccod(x, y, dim=None, wantgain=0, wantmeansub=1):
     """Calculate the coefficient of determination
 
     Args:
@@ -153,7 +153,8 @@ def calccod(x, y, wantgain=0, wantmeansub=1):
     """
 
     # input
-    dim = np.argmax(x.shape)
+    if dim is None:
+        dim = np.argmax(x.shape)
 
     # handle gain
     if wantgain:
