@@ -94,7 +94,7 @@ def constructStimulusMatrix(v, prenumlag, postnumlag, wantwrap=0):
     return f
 
 
-def calccod(x, y, wantgain=0, wantmeansub=1):
+def calccod(x, y, dim=None, wantgain=0, wantmeansub=1):
     """Calculate the coefficient of determination
 
     Args:
@@ -153,7 +153,8 @@ def calccod(x, y, wantgain=0, wantmeansub=1):
     """
 
     # input
-    dim = np.argmax(x.shape)
+    if dim is None:
+        dim = np.argmax(x.shape)
 
     # handle gain
     if wantgain:
@@ -236,8 +237,9 @@ def olsmatrix(X):
     """OLS regression
 
     what we want to do is to perform OLS regression using <X>
-    and obtain the parameter estimates.  this is accomplished
-    by inv(X'\*X)\*X'\*y = f\*y where y is the data (samples x cases).
+    and obtain the parameter estimates. this is accomplished
+    by np.linalg.inv(X.T @ X) @ X.T @ y = f @ y where y is the
+    data (samples x cases).
 
     what this function does is to return <f> which has dimensions
     parameters x samples.
@@ -268,7 +270,8 @@ def olsmatrix(X):
     # report warning
     if not np.any(good) == 1:
         print(
-            "regressors are all zeros; we will estimate a 0 weight for those regressors."
+            "regressors are all zeros. \n"
+            "we will estimate a 0 weight for those regressors."
         )
         f = np.zeros((X.shape[1], X.shape[0]))
         return f
@@ -276,15 +279,16 @@ def olsmatrix(X):
     # do it
     if np.any(bad):
         print(
-            "One or more regressors are all zeros; we will estimate a 0 weight for those regressors."
+            "One or more regressors are all zeros. \n"
+            "we will estimate a 0 weight for those regressors."
         )
         f = np.zeros((X.shape[1], X.shape[0]))
-        X = np.mat(X)
-            f[good, :] = np.linalg.inv(
-                X[:, good].T  @ X[:, good]) @ X[:, good].T
+
+        f[good, :] = np.linalg.inv(
+            X[:, good].T  @ X[:, good]) @ X[:, good].T
 
     else:
-        X = np.mat(X)
+
         f = np.linalg.inv(X.T @ X) @ X.T
 
     return f
