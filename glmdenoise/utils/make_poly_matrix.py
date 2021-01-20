@@ -1,3 +1,4 @@
+from glmdenoise.utils.optimiseHRF import olsmatrix
 from sklearn.preprocessing import normalize
 import numpy as np
 
@@ -11,10 +12,9 @@ def make_project_matrix(X):
     Returns:
         array: Projection matrix size of X.shape[0] x X.shape[0]
 
-    TODO handle zero regressors.
     """
-    X = np.mat(X)
-    return np.eye(X.shape[0]) - (X*(np.linalg.inv(X.T*X)*X.T))
+
+    return np.eye(X.shape[0]) - (X @ olsmatrix(X))
 
 
 def make_poly_matrix(n, degrees):
