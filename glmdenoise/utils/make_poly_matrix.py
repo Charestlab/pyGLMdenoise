@@ -3,7 +3,7 @@ from sklearn.preprocessing import normalize
 import numpy as np
 
 
-def make_project_matrix(X):
+def make_projection_matrix(X):
     """ Calculates a projection matrix
 
     Args:
@@ -17,7 +17,7 @@ def make_project_matrix(X):
     return np.eye(X.shape[0]) - (X @ olsmatrix(X))
 
 
-def make_poly_matrix(n, degrees):
+def make_polynomial_matrix(n, degrees):
     """Calculates a matrix of polynomials used to regress them out of your data
 
     Args:
@@ -25,20 +25,22 @@ def make_poly_matrix(n, degrees):
         degrees (array): vector of polynomial degrees
 
     Returns:
-        array: array of n x len(degrees)
+        polynomials: array of n x len(degrees)
     """
     time_points = np.linspace(-1, 1, n)[np.newaxis].T
-    polys = np.zeros((n, len(degrees)))
+    polynomials = np.zeros((n, len(degrees)))
 
     # Loop over degrees
     for i, d in enumerate(degrees):
-        polyvector = np.mat(time_points**d)
+
+        poly_vector = time_points**d
 
         if i > 0:  # project out the other polynomials
-            polyvector = make_project_matrix(polys[:, :i]) * polyvector
+            poly_vector = make_projection_matrix(
+                polynomials[:, :i]) @ poly_vector
 
-        polys[:, i] = normalize(polyvector.T)
-    return polys  # make_project_matrix(polys)
+        polynomials[:, i] = normalize(poly_vector.T)
+    return polynomials  # make_project_matrix(polys)
 
 
 def select_noise_regressors(r2_nrs, pcstop=1.05):

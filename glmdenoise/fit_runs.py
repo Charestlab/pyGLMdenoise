@@ -4,7 +4,7 @@ import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-def fit_runs(data, design):
+def fit_runs(data, design, verbose=True):
     """Fits a least square of combined runs.
 
     The matrix addition is equivalent to concatenating the list of data and
@@ -23,7 +23,7 @@ def fit_runs(data, design):
 
     X = np.vstack(design)
     # X = np.linalg.inv(X.T @ X) @ X.T
-    X = olsmatrix(X)
+    X = olsmatrix(X, verbose=verbose)
 
     betas = 0
     start_col = 0

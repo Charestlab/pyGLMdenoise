@@ -16,11 +16,11 @@ from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf
 from glmdenoise.report import Report
 from glmdenoise.defaults import default_params
-from glmdenoise.whiten_data import whiten_data
+from glmdenoise.whiten_data import whiten_data, construct_projection_matrix
 from glmdenoise.fit_runs import fit_runs
 from glmdenoise.cross_validate import cross_validate
-from glmdenoise.utils.make_poly_matrix import (make_poly_matrix,
-                                               make_project_matrix)
+from glmdenoise.utils.make_poly_matrix import (make_polynomial_matrix,
+                                               make_projection_matrix)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -60,7 +60,8 @@ class GLMdenoise():
 
         if 'hrf' not in self.params:
             stimdur = numpy.median(design[0].duration.values)
-            self.params['hrf'] = normalisemax(getcanonicalhrf(stimdur, tr))
+            self.params['hrf'] = normalisemax(
+                getcanonicalhrf(stimdur, tr), dim='global')
         self.params['tr'] = tr
 
         # calculate polynomial degrees
@@ -89,11 +90,11 @@ class GLMdenoise():
                 convdes.append(X)
                 max_poly_deg = np.arange(
                     int(((X.shape[0] * self.tr) / 60) // 2) + 1)
-                polynomials = make_poly_matrix(X.shape[0], max_poly_deg)
+                polynomials = make_polynomial_matrix(X.shape[0], max_poly_deg)
                 if self.extra_regressors:
                     polynomials = np.c_[polynomials,
                                         self.extra_regressors[run]]
-                polymatrix.append(make_project_matrix(polynomials))
+                polymatrix.append(make_projection_matrix(polynomials))
 
             # optimise hrf requires whitening of the data
             whitened_data, whitened_design = whiten_data(
@@ -125,7 +126,12 @@ class GLMdenoise():
 
         print('Making initial fit')
         r2s_initial = cross_validate(
-            self.data, self.design, self.extra_regressors, poly_degs=self.poly_degs)[0]
+            self.data,
+            self.design,
+            self.extra_regressors,
+            poly_degs=self.poly_degs
+        )[0]
+
         print('Done!')
 
         print('Getting noise pool')
@@ -137,8 +143,11 @@ class GLMdenoise():
         for run in self.data:
             noise_pool = run[:, self.results['noise_pool_mask']]
 
-            polynomials = make_poly_matrix(noise_pool.shape[0], self.poly_degs)
-            noise_pool = make_project_matrix(polynomials) @ noise_pool
+            polynomials = make_polynomial_matrix(
+                noise_pool.shape[0],
+                self.poly_degs
+            )
+            noise_pool = make_projection_matrix(polynomials) @ noise_pool
 
             noise_pool = normalize(noise_pool, axis=0)
 
@@ -161,6 +170,7 @@ class GLMdenoise():
                                     self.results['pc_regressors'][x],
                                     self.poly_degs) for x in tqdm(
                 range(self.n_pcs), desc='Number of PCs'))
+
         print('Done!')
         # calculate best number of PCs
         self.results['PCA_R2s'] = np.vstack(
@@ -260,15 +270,32 @@ class GLMdenoise():
         print('Calculating overall R2 of final fit...')
 
         # The below does not currently work, see #47
-        modelfits = [((olsmatrix(x) @ y).T @ x.T).T for x, y in zip(
-            whitened_design, whitened_data)]
+        # modelfits = [((olsmatrix(x) @ y).T @ x.T).T for x, y in zip(
+        #     whitened_design, whitened_data)]
+
+        # predict the time-series for the final fit
+        predicted_ts = [x @ self.results['final_fit'] for x in self.design]
+
+        # remove polynomials from the model fits (or predictions)
+        polymatrix = [construct_projection_matrix(
+            self.design[r].shape[0],
+            self.results['pc_regressors'][self.results['select_pca']][r],
+            self.poly_degs) for r in range(self.n_runs)]
+
+        modelfit = [x @ y for x, y in zip(polymatrix, predicted_ts)]
+
+        # modelfits = [make_projection_matrix(
+        # x) @ y for x , y in zip(self.design, modelfits)]
+
         # calculate run-wise fit
 
-        self.results['R2s'] = calccodStack(whitened_data, modelfits)
+        self.results['R2s'] = calccodStack(self.data, modelfit)
         self.results['R2runs'] = [calccod(
-            cdata,
             mfit,
-            0, 0, 0) for cdata, mfit in zip(whitened_data, modelfits)]
+            cdata,
+            dim=0,
+            wantgain=0,
+            wantmeansub=0) for mfit, cdata in zip(modelfit, self.data)]
         print('Done')
 
         print('Calculating SnR...')

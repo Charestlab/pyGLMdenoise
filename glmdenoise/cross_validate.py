@@ -2,7 +2,8 @@ import numpy as np
 from itertools import compress
 from tqdm import tqdm
 import warnings
-from glmdenoise.utils.make_poly_matrix import make_poly_matrix, make_project_matrix
+from glmdenoise.utils.make_poly_matrix import (make_polynomial_matrix,
+                                               make_projection_matrix)
 from glmdenoise.whiten_data import whiten_data
 from glmdenoise.r2_nom_denom import R2_nom_denom
 from glmdenoise.fit_runs import fit_runs
@@ -44,10 +45,12 @@ def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5))
 
         y = data[run]
         # get polynomials
-        polynomials = make_poly_matrix(y.shape[0], poly_degs)
+        polynomials = make_polynomial_matrix(y.shape[0], poly_degs)
+
+        projections = make_projection_matrix(polynomials)
         # project out polynomials from data and prediction
-        y = make_project_matrix(polynomials) @ y
-        yhat = make_project_matrix(polynomials) @ yhat
+        y = projections @ y
+        yhat = projections @ yhat
 
         # get run-wise r2s
         nom, denom = R2_nom_denom(y, yhat)

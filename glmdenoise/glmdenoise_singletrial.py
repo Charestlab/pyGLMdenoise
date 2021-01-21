@@ -10,7 +10,12 @@ import matplotlib.pyplot as plt
 from glmdenoise.utils.make_image_stack import make_image_stack
 from glmdenoise.utils.optimiseHRF import convolveDesign
 from glmdenoise.utils.findtailthreshold import findtailthreshold
-
+from glmdenoise.whiten_data import whiten_data
+from glmdenoise.utils.optimiseHRF import (mtimesStack,
+                                          olsmatrix,
+                                          optimiseHRF,
+                                          calccod,
+                                          calccodStack)
 
 dir0 = os.path.dirname(os.path.realpath(__file__))
 
@@ -351,6 +356,7 @@ def GLMestimatesingletrial(
     numruns = len(design)
     is3d = data[0].ndim > 2  # is this the X Y Z T case?
     if is3d:
+        wantfig = 1
         x, y, z, _ = data[0].shape
         for p in range(len(data)):
             data[p] = np.moveaxis(data[p], -1, 0)
@@ -418,7 +424,9 @@ def GLMestimatesingletrial(
         opt['wantpercentbold'] = 1
 
     if 'hrftoassume' not in opt:
-        opt['hrftoassume'] = normalisemax(getcanonicalhrf(stimdur, tr))
+        opt['hrftoassume'] = normalisemax(
+          getcanonicalhrf(stimdur, tr),
+          dim='global')
 
     if 'hrflibrary' not in opt:
         opt['hrflibrary'] = getcanonicalhrflibrary(stimdur, tr).T
@@ -457,7 +465,7 @@ def GLMestimatesingletrial(
     if type(opt['maxpolydeg']) is int:
         opt['maxpolydeg'] = np.tile(opt['maxpolydeg'], numruns).tolist()
 
-    opt['hrftoassume'] = normalisemax(opt['hrftoassume'])
+    opt['hrftoassume'] = normalisemax(opt['hrftoassume'], dim='global')
     opt['hrflibrary'] = normalisemax(opt['hrflibrary'], 0)
     opt['fracs'] = np.unique(opt['fracs'])[::-1]
     np.testing.assert_equal(
@@ -470,7 +478,7 @@ def GLMestimatesingletrial(
         True,
         err_msg='fracs must be less than or equal to 1')
 
-    if outputdir is not None:
+    if outputdir is not None and is3d:
         wantfig = 1  # if outputdir is not None, we want figures
 
     # deal with output directory
@@ -521,7 +529,7 @@ def GLMestimatesingletrial(
     if opt['wantlss'] == 1:
         np.testing.assert_equal(
             opt['wantfileoutputs'][1] == 1 or opt['wantmemoryoutputs'][1] == 1,
-            True
+            True,
             err_msg='<wantlss> is 1, but you did not request type B')
 
     # initialize output
@@ -619,6 +627,7 @@ def GLMestimatesingletrial(
             make_image_stack(np.reshape(meanvol, [x, y, z])), cmap='gray')
         plt.colorbar()
         plt.savefig(os.path.join(outputdir, 'meanvol.png'))
+        plt.close('all')
 
     # preserve in memory if desired, and then clean up
     if opt['wantmemoryoutputs'][whmodel] == 1:
@@ -634,10 +643,10 @@ def GLMestimatesingletrial(
     else:
         thresh = findtailthreshold(onoffR2.flatten())[0]
 
-    if 'brainR2' is not in opt:
+    if 'brainR2' not in opt:
         opt['brainR2'] = thresh
 
-    if 'pcR2cutoff' is not in opt:
+    if 'pcR2cutoff' not in opt:
         opt['pcR2cutoff'] = thresh
 
     # FIT TYPE-B MODEL [FITHRF]
@@ -672,10 +681,10 @@ def GLMestimatesingletrial(
 
         # loop over chunks
         print('*** FITTING TYPE-B MODEL (FITHRF) ***\n')
-        for z in chunks:
-            print(f'working on chunk {z} of {len(chunks)}.\n')
+        for i, chunk in enumerate(chunks):
+            print(f'working on chunk {i} of {len(chunks)}.\n')
 
-            data_chunk = [dat[:, z] for dat in data]
+            data_chunk = [dat[:, chunk] for dat in data]
 
             # do the fitting and accumulate all the betas
             # someX x Y x Z x trialbetas x HRFs
@@ -690,43 +699,52 @@ def GLMestimatesingletrial(
                 conv_designSINGLE = [convolveDesign(
                     X, current_hrf) for X in designSINGLE]
 
-                results_t = cross_validate(
-                    data_chunk,
-                    conv_designSINGLE,
-                    opt['extraregressors'],
-                    poly_degs=range(opt['maxpolydeg'][0]))
+                wdata, wdesign = whiten_data(data_chunk, conv_designSINGLE)
+                modelfits = [((olsmatrix(x, verbose=False) @ y).T @ x.T).T for x, y in zip(
+                    wdesign, data_chunk)]
 
+                FitHRFR2_t.append(calccodStack(data_chunk, modelfits))
 
-                FitHRFR2_t.append(results_t[0])
-                FitHRFR2run_t.append(results_t[1])
-                betas_t.append(results_t[2])
-         
+                r2run = [calccod(
+                    cdata,
+                    mfit,
+                    0, 0, 0) for cdata, mfit in zip(wdata, modelfits)]
+
+                FitHRFR2run_t.append(np.stack(r2run))
+
+                betas_t.append(fit_runs(wdata, wdesign, verbose=False))
+
             # reshape fits
-            FitHRFR2_t = np.stack(FitHRFR2_t) # n_hrfs by xchunk by y by z
-            FitHRFR2run_t = np.stack(FitHRFR2run_t) # n_hrfs by xchunk by y by z by run?
-            betas_t = np.stack(betas_t) # n_hrfs by xchunk by y by z x trialbetas
-            
+            FitHRFR2_t = np.stack(FitHRFR2_t)  # n_hrfs by xchunk by y by z
+            FitHRFR2run_t = np.stack(FitHRFR2run_t)
+            # n_hrfs by xchunk by y by z by run?
+            betas_t = np.stack(betas_t)
+            # n_hrfs by xchunk by y by z x trialbetas
+
             # keep only the betas we want
             ii = np.argmax(FitHRFR2_t, axis=0)
-            betas_t = betas_t[ii, :, :, :]
+            betas = []
+            for jj in range(len(chunk)):
+                this_betas = betas_t[:, :, jj]
+                betas.append(this_betas[ii[jj], :])
 
             # append
             FitHRFR2.append(FitHRFR2_t)
             FitHRFR2run.append(FitHRFR2run_t)
-            modelmd.append(betas_t)
+            modelmd.append(betas)
 
         FitHRFR2 = np.hstack(FitHRFR2)
         FitHRFR2run = np.hstack(FitHRFR2run)
         modelmd = np.hstack(modelmd)
 
         # use R2 to select the best HRF for each voxel
-        R2 = np.max(FitHRFR2, axis=0) # R2 is X x Y x Z
-        HRFindex = np.argmax(FitHRFR2, axis=0) # HRFindex is X x Y x Z
+        R2 = np.max(FitHRFR2, axis=0)  # R2 is X x Y x Z
+        HRFindex = np.argmax(FitHRFR2, axis=0)  # HRFindex is X x Y x Z
         # also, use R2 from each run to select best HRF
-        HRFindexrun = np.argmax(FitHRFR2run,axis=0)
+        HRFindexrun = np.argmax(FitHRFR2run, axis=0)
 
         # using each voxel's best HRF, what are the corresponding R2run values?
-        R2run = FitHRFR2run[HRFindexrun, :, :, :, :] # R2run is X x Y x Z x runs
+        R2run = FitHRFR2run[HRFindexrun, :, :, :, :]  # R2run is X x Y x Z x runs
 
         # FIT TYPE-B MODEL (LSS) INTERLUDE BEGIN
 
@@ -737,11 +755,11 @@ def GLMestimatesingletrial(
         if opt['wantlss']:
 
               # initalize
-              modelmd = np.zeros(nx*ny*nz,numtrials,'single');     # X*Y*Z x trialbetas  [the final beta estimates]
+              modelmd = np.zeros(nx*ny*nz,numtrials).astype(np.float32)     # X*Y*Z x trialbetas  [the final beta estimates]
 
               # loop over chunks
               print('*** FITTING TYPE-B MODEL (FITHRF but with LSS estimation) ***\n')
-              for z in range(len(chunks)):
+              for chunk in range(len(chunks)):
                   print(f'working on chunk {z} of {len(chunks)}.\n')
             
                   # loop over possible HRFs

@@ -2,17 +2,9 @@ import os
 import glob
 import numpy as np
 import nibabel as nib
-<<<<<<< HEAD
-from itertools import compress
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
 
-=======
-import pandas as pd
-from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.gethrf import getcanonicalhrf
-from glmdenoise.utils.normalisemax import normalisemax
->>>>>>> olshandlezeros
 
 sub = 2
 ses = 1
@@ -52,8 +44,6 @@ eventfs.sort()
 
 data = []
 design = []
-
-hrf = normalisemax(getcanonicalhrf(stimdur, TR))
 
 for i, (run, eventf) in enumerate(zip(runs, eventfs)):
     print(f'run {i}')
