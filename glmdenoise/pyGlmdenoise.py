@@ -73,8 +73,13 @@ class GLMdenoise():
             self.results['mean_image'], 99) / 2
 
         # reduce data
-        self.data = [d[:, self.results['mean_mask']].astype(
-            np.float16) for d in self.data]
+        if self.params['maskbrain']:
+            # mask image
+            self.data = [d[:, self.results['mean_mask']].astype(
+                np.float32) for d in self.data]
+        else:
+            # just make sure we're in float32
+            self.data = [d.astype(np.float32) for d in self.data]
 
         """
         """
@@ -98,7 +103,10 @@ class GLMdenoise():
 
             # optimise hrf requires whitening of the data
             whitened_data, whitened_design = whiten_data(
-                self.data, convdes, self.extra_regressors, poly_degs=self.poly_degs)
+                self.data,
+                convdes,
+                self.extra_regressors,
+                poly_degs=self.poly_degs)
 
             hrfparams = optimiseHRF(
                 self.design,
@@ -155,8 +163,9 @@ class GLMdenoise():
             u = np.linalg.svd(noise_pool)[0]
             u = u[:, :self.n_pcs+1]
             u = u / np.std(u, 0)
-            run_PCAs.append(u)
+            run_PCAs.append(u.astype(np.float32))
 
+        # this causes memory ooomph
         self.results['pc_regressors'] = []
         for n_pc in range(self.n_pcs):
             self.results['pc_regressors'].append(
@@ -174,7 +183,7 @@ class GLMdenoise():
         print('Done!')
         # calculate best number of PCs
         self.results['PCA_R2s'] = np.vstack(
-            np.asarray(np.asarray(PCresults)[:, 0])).astype(float)
+            np.asarray(np.asarray(PCresults)[:, 0])).astype(np.float32)
         self.results['PCA_R2_runs'] = np.asarray(np.asarray(PCresults)[:, 1])
         self.results['PCA_weights'] = np.asarray(np.asarray(PCresults)[:, 2])
         self.best_mask = np.any(
@@ -288,6 +297,11 @@ class GLMdenoise():
         # x) @ y for x , y in zip(self.design, modelfits)]
 
         # calculate run-wise fit
+
+        # project polymatrix from self.data
+        self.data = [construct_projection_matrix(
+            x.shape[0], poly_degs=self.poly_degs
+        ) @ x for x in self.data]
 
         self.results['R2s'] = calccodStack(self.data, modelfit)
         self.results['R2runs'] = [calccod(

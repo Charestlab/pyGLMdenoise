@@ -48,6 +48,7 @@ def cross_validate(data, design, extra_regressors=False, poly_degs=np.arange(5))
         polynomials = make_polynomial_matrix(y.shape[0], poly_degs)
 
         projections = make_projection_matrix(polynomials)
+
         # project out polynomials from data and prediction
         y = projections @ y
         yhat = projections @ yhat

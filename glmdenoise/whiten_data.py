@@ -6,7 +6,9 @@ import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
-def construct_projection_matrix(ntimepoints, extra_regressors=False, poly_degs=None):
+def construct_projection_matrix(ntimepoints,
+                                extra_regressors=None,
+                                poly_degs=None):
     """[summary]
 
     Arguments:
