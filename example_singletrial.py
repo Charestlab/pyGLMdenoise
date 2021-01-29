@@ -4,12 +4,12 @@ import numpy as np
 import nibabel as nib
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
-
+from glmdenoise.single_trial import glm_estimatesingletrial
 
 sub = 2
 ses = 1
 stimdur = 0.5
-TR = 2
+tr = 2
 
 proj_path = os.path.join(
     '/home',
@@ -42,6 +42,9 @@ eventfs = glob.glob(
     os.path.join(design_path.format(sub, ses), '*events.tsv'))
 eventfs.sort()
 
+runs = runs[:3]
+eventfs = eventfs[:3]
+
 data = []
 design = []
 
@@ -62,10 +65,24 @@ for i, (run, eventf) in enumerate(zip(runs, eventfs)):
     # Create design matrix
     events = pd.DataFrame()
     events["duration"] = [stimdur] * n_events
-    events["onset"] = onsets
+    events["onset"] = np.round(onsets)
     events["trial_type"] = items
 
     # pass in the events data frame. the convolving of the HRF now
     # happens internally
-    design.append(make_design(events, TR, n_volumes))
+    design.append(
+        make_design(events, tr, n_volumes)
+        )
     data.append(y)
+
+opt = {'wantlss': 1}
+outputdir = 'GLMestimatesingletrialoutputs'
+
+gst = glm_estimatesingletrial(opt)
+
+gst.fit(
+    design,
+    data,
+    stimdur,
+    tr,
+    outputdir=outputdir)

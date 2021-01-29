@@ -26,7 +26,7 @@ def make_design(events, tr, n_times, hrf=None):
 
             # onset times for qth condition in run p
             otimes = np.array(
-                events[events['trial_type'] == cond]['onset'].values//tr).astype(int)
+                (events[events['trial_type'] == cond]['onset'].values//tr)).astype(int)
             yvals = np.zeros((n_times))
             for r in otimes:
                 yvals[r] = 1

@@ -6,11 +6,10 @@ import warnings
 from joblib import Parallel, delayed
 from sklearn.preprocessing import normalize
 from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.optimiseHRF import (mtimesStack,
-                                          olsmatrix,
-                                          optimiseHRF,
-                                          calccod,
-                                          calccodStack)
+from glmdenoise.utils.calc_cod import (calc_cod,
+                                       calc_cod_stack)
+from glmdenoise.utils.optimise_hrf import optimise_hrf
+
 from glmdenoise.select_noise_regressors import select_noise_regressors
 from glmdenoise.utils.normalisemax import normalisemax
 from glmdenoise.utils.gethrf import getcanonicalhrf
@@ -108,7 +107,7 @@ class GLMdenoise():
                 self.extra_regressors,
                 poly_degs=self.poly_degs)
 
-            hrfparams = optimiseHRF(
+            hrfparams = optimise_hrf(
                 self.design,
                 whitened_data,
                 self.tr,
@@ -303,8 +302,8 @@ class GLMdenoise():
             x.shape[0], poly_degs=self.poly_degs
         ) @ x for x in self.data]
 
-        self.results['R2s'] = calccodStack(self.data, modelfit)
-        self.results['R2runs'] = [calccod(
+        self.results['R2s'] = calc_cod_stack(self.data, modelfit)
+        self.results['R2runs'] = [calc_cod(
             mfit,
             cdata,
             dim=0,

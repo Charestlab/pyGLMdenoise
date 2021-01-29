@@ -47,19 +47,19 @@ def findtailthreshold(v, figpath=None):
         wantfig = 1
 
     # quick massaging of input
-    v = v[np.isfinite(v)]
-    if len(v) > maxsz:
+    v2 = v[np.isfinite(v)]
+    if len(v2) > maxsz:
         print('warning: too big, so taking a subset')
-        v = picksubset(v, maxsz)
+        v2 = picksubset(v2, maxsz)
 
     # fit mixture of two gaussians
-    gmfit = gmdist(n_components=2, n_init=numreps).fit(v.reshape(-1, 1))
+    gmfit = gmdist(n_components=2, n_init=numreps).fit(v2.reshape(-1, 1))
 
     # figure out a nice range
-    rng = robustrange(v.flatten())[0]
+    rng = robustrange(v2.flatten())[0]
 
     # evaluate posterior
-    allvals = np.linspace(np.median(v), rng[1], num=nprecision)
+    allvals = np.linspace(np.median(v2), rng[1], num=nprecision)
     checkit = gmfit.predict_proba(allvals.reshape(-1, 1))
 
     # figure out crossing

@@ -1,4 +1,4 @@
-from glmdenoise.utils.optimiseHRF import olsmatrix
+from glmdenoise.utils.olsmatrix import olsmatrix_ulen
 from sklearn.preprocessing import normalize
 import numpy as np
 
@@ -14,7 +14,7 @@ def make_projection_matrix(X):
 
     """
 
-    return np.eye(X.shape[0]) - (X @ olsmatrix(X))
+    return np.eye(X.shape[0]) - np.einsum('ij,jk', X, olsmatrix_ulen(X))
 
 
 def make_polynomial_matrix(n, degrees):
@@ -36,8 +36,11 @@ def make_polynomial_matrix(n, degrees):
         poly_vector = time_points**d
 
         if i > 0:  # project out the other polynomials
-            poly_vector = make_projection_matrix(
-                polynomials[:, :i]) @ poly_vector
+
+            poly_vector = np.einsum(
+                'ij,jk',
+                make_projection_matrix(polynomials[:, :i]),
+                poly_vector)
 
         polynomials[:, i] = normalize(poly_vector.T)
     return polynomials  # make_project_matrix(polys)
