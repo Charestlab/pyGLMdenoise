@@ -9,6 +9,9 @@ from glmdenoise.utils.chunking import chunking
 from glmdenoise.utils.make_image_stack import make_image_stack
 from glmdenoise.utils.findtailthreshold import findtailthreshold
 from glmdenoise.utils.glm_estimatemodel import glm_estimatemodel
+from glmdenoise.make_polynomial_matrix import (make_polynomial_matrix,
+                                               make_projection_matrix)
+from sklearn.preprocessing import normalize
 from ipdb import set_trace
 
 dir0 = os.path.dirname(os.path.realpath(__file__))
@@ -376,6 +379,7 @@ class glm_estimatesingletrial():
 
         # calc
         numruns = len(design)
+        numtimepoints = [data[p].shape[1] for p in range(numruns)]
 
         if xyz:
             numvoxels = np.prod(xyz)
@@ -852,7 +856,6 @@ class glm_estimatesingletrial():
                 plt.savefig(os.path.join(outputdir, 'HRFindex.png'))
                 plt.close('all')
 
-
             # preserve in memory if desired, and then clean up
             if params['wantmemoryoutputs'][whmodel] == 1:
                 results['lss'] = {
@@ -866,3 +869,60 @@ class glm_estimatesingletrial():
                     'meanvol': meanvol
                 }
 
+        # COMPUTE GLMDENOISE REGRESSORS
+
+        # if the user does not want to perform GLMdenoise,
+        # we can just skip all of this
+        if params['wantglmdenoise'] == 0:
+
+            # just create placeholders
+            pcregressors = []
+            noisepool = []
+
+        else:
+
+            # figure out the noise pool
+
+            # threshold for non-brain voxels
+            thresh = np.percentile(
+                meanvol.flaten(),
+                params['brainthresh'][0]
+            )*params['brainthresh'][1]
+
+            # logical indicating voxels that are bright (brain voxels)
+            bright = meanvol > thresh
+
+            # logical indicating voxels with poor R2
+            badR2 = onoffR2 < params['brainR2']
+
+            # logical indicating voxels that satisfy all criteria
+            noisepool = bright and badR2 and not params['brainexclude']
+
+            # determine noise regressors
+            pcregressors = []
+            print('*** DETERMINING GLMDENOISE REGRESSORS ***\n')
+            polymatrix = []
+            for p, run in enumerate(self.data):
+                # extract the time-series data for the noise pool
+                noise_pool = np.transpose(run)[:, noisepool]
+
+                # project out polynomials from the data
+                # this projects out polynomials
+                pmatrix = make_polynomial_matrix(
+                    numtimepoints[p],
+                    params['maxpolydeg'][p])
+
+                polymatrix.append(
+                    make_projection_matrix(pmatrix))
+
+                noise_pool = polymatrix.astype(np.float32) @ noise_pool
+
+                noise_pool = normalize(noise_pool, axis=0)
+
+                noise_pool = noise_pool @ noise_pool.T
+                u = np.linalg.svd(noise_pool)[0]
+                u = u[:, :params['numpctotry']+1]
+                u = u / np.std(u, 0)
+                pcregressors.append(u.astype(np.float32))
+
+        # CROSS-VALIDATE TO FIGURE OUT NUMBER OF GLMDENOISE REGRESSORS
