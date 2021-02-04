@@ -9,10 +9,15 @@ from glmdenoise.utils.chunking import chunking
 from glmdenoise.utils.make_image_stack import make_image_stack
 from glmdenoise.utils.findtailthreshold import findtailthreshold
 from glmdenoise.utils.glm_estimatemodel import glm_estimatemodel
-from glmdenoise.make_polynomial_matrix import (make_polynomial_matrix,
+from glmdenoise.utils.make_poly_matrix import (make_polynomial_matrix,
                                                make_projection_matrix)
+from glmdenoise.utils.calcbadness import calcbadness
+from glmdenoise.utils.olsmatrix import olsmatrix
+from glmdenoise.select_noise_regressors import select_noise_regressors
 from sklearn.preprocessing import normalize
+from tqdm import tqdm
 from ipdb import set_trace
+
 
 dir0 = os.path.dirname(os.path.realpath(__file__))
 
@@ -189,7 +194,7 @@ class glm_estimatesingletrial():
 
         *** MODEL TYPE C (FITHRF_GLMDENOISE) FLAGS ***
 
-        <numpcstotry> (optional) is a non-negative integer indicating the
+        <n_pcs> (optional) is a non-negative integer indicating the
          maximum number of PCs to enter into the model. Default: 10.
 
         <brainthresh> (optional) is [A B] where A is a percentile for voxel
@@ -227,7 +232,7 @@ class glm_estimatesingletrial():
             early is to achieve a selection strategy that is robust to noise
             and shallow performance curves and that avoids overfitting.
         -B: where B is the number of PCs to use for the final model. B can be
-            any integer between 0 and params.numpcstotry. Note that if -B case is
+            any integer between 0 and params.n_pcs. Note that if -B case is
             used, cross-validation is NOT performed for the type-C model, and
             instead weblindly use B PCs.
          Default: 1.05.
@@ -369,6 +374,9 @@ class glm_estimatesingletrial():
         # DEAL WITH INPUTS
         params = self.params
 
+        # initialise return
+        results = {}
+
         # xyz can either be a tuple of dimensions x y z
         # or a boolean indicating that data was 2D
         data, design, xyz = check_inputs(data, design)
@@ -379,7 +387,7 @@ class glm_estimatesingletrial():
 
         # calc
         numruns = len(design)
-        numtimepoints = [data[p].shape[1] for p in range(numruns)]
+        numtimepoints = [data[run_i].shape[1] for run_i in range(numruns)]
 
         if xyz:
             numvoxels = np.prod(xyz)
@@ -387,26 +395,28 @@ class glm_estimatesingletrial():
             numvoxels = self.data[0].shape[0]
 
         # check number of time points and truncate if necessary
-        for p in np.arange(len(data)):
-            if self.data[p].shape[1] > self.design[p].shape[0]:
+        for run_i in np.arange(len(data)):
+            if self.data[run_i].shape[1] > self.design[run_i].shape[0]:
                 print(
-                    f'WARNING: run {p} has more time points'
+                    f'WARNING: run {run_i} has more time points'
                     'in <data> than <design>. We are truncating'
                     '<data>.\n')
-                self.data[p] = self.data[p][:, np.arange(self.design.shape[0])]
+                self.data[run_i] = self.data[run_i][:, np.arange(
+                    self.design.shape[0])]
 
-            if self.data[p].shape[1] < self.design[p].shape[0]:
+            if self.data[run_i].shape[1] < self.design[run_i].shape[0]:
                 print(
-                    f'WARNING: run {p} has more time points in <design>'
+                    f'WARNING: run {run_i} has more time points in <design>'
                     'than <data>. We are truncating <design>.\n')
-                self.design[p] = self.design[p][np.arange(self.data[p].shape[0]), :]
+                self.design[run_i] = self.design[run_i][np.arange(
+                    self.data[run_i].shape[0]), :]
 
         # inputs
         if 'xvalscheme' not in params:
             params['xvalscheme'] = np.arange(numruns)
 
         if 'sessionindicator' not in params:
-            params['sessionindicator'] = np.ones((1, numruns))
+            params['sessionindicator'] = np.ones((1, numruns)).astype(int)
 
         if 'maxpolydeg' not in params:
             params['maxpolydeg'] = [
@@ -512,9 +522,6 @@ class glm_estimatesingletrial():
                 test, True,
                 err_msg='<wantlss> is 1, but you did not request type B')
 
-        # initialize output
-        results = []
-
         # PRE-PROCESSING FOR THE EXPERIMENTAL DESIGN
 
         # calculate the number of trials
@@ -539,25 +546,26 @@ class glm_estimatesingletrial():
         stimix = []
 
         # loop through runs
-        for p in np.arange(len(self.design)):
-            designSINGLE.append(np.zeros((self.design[p].shape[0], numtrials)))
+        for run_i in np.arange(len(self.design)):
+            designSINGLE.append(
+                np.zeros((self.design[run_i].shape[0], numtrials)))
 
             run_validcolumns = []
             # loop through the volumes for that run
-            for q in np.arange(self.design[p].shape[0]):
+            for cond_i in np.arange(self.design[run_i].shape[0]):
                 # if a condition was presented on that volume
                 # find which
-                temp = np.where(self.design[p][q, :])[0]
+                temp = np.where(self.design[run_i][cond_i, :])[0]
 
                 # if that volume had a condition shown
                 if not np.size(temp) == 0:
                     # flip it on
-                    designSINGLE[p][q, cnt] = 1
+                    designSINGLE[run_i][cond_i, cnt] = 1
                     # keep track of the order
                     stimorder.append(temp[0])
                     run_validcolumns.append(cnt)
                     cnt += 1
-            validcolumns.append(run_validcolumns)
+            validcolumns.append(np.asarray(run_validcolumns))
 
             stimix.append(np.asarray(stimorder)[np.asarray(run_validcolumns)])
 
@@ -568,7 +576,7 @@ class glm_estimatesingletrial():
         # (2) We assume the HRF.
 
         # define
-        whmodel = 1
+        whmodel = 0
 
         # collapse all conditions and fit
         print('*** FITTING TYPE-A MODEL (ONOFF) ***\n')
@@ -596,33 +604,37 @@ class glm_estimatesingletrial():
         # save to disk if desired
         if params['wantfileoutputs'][whmodel] == 1:
             file0 = os.path.join(outputdir, 'TYPEA_ONOFF.npy')
-            print(f'*** Saving results to {file0}. ***\n')
+            print(f'\n*** Saving results to {file0}. ***\n')
             np.save(file0, onoffR2, meanvol, xyz)
 
         # figures
         if wantfig:
-            """ TODO
-            port normalizerange.m and add to makeimstack
-            """
             plt.imshow(
                 make_image_stack(onoffR2.reshape(xyz)),
                 vmin=0,
                 vmax=100,
                 cmap='hot'
             )
+            ax = plt.gca()
+            ax.axes.xaxis.set_ticklabels([])
+            ax.axes.yaxis.set_ticklabels([])
             plt.colorbar()
             plt.savefig(os.path.join(outputdir, 'onoffR2.png'))
             plt.close('all')
             plt.imshow(make_image_stack(meanvol.reshape(xyz)), cmap='gray')
+            ax = plt.gca()
+            ax.axes.xaxis.set_ticklabels([])
+            ax.axes.yaxis.set_ticklabels([])
             plt.colorbar()
             plt.savefig(os.path.join(outputdir, 'meanvol.png'))
             plt.close('all')
 
         # preserve in memory if desired, and then clean up
         if params['wantmemoryoutputs'][whmodel] == 1:
-            results = {}
-            results['onoffR2'] = onoffR2
-            results['meanvol'] = meanvol
+            results['typea'] = {
+                'onoffR2': onoffR2,
+                'meanvol': meanvol
+            }
 
         # DETERMINE THRESHOLDS
         if wantfig:
@@ -632,10 +644,11 @@ class glm_estimatesingletrial():
         else:
             thresh = findtailthreshold(onoffR2.flatten())[0]
 
-        if 'brainR2' not in params:
+        if 'brainR2' not in params or not params['brainR2']:
+            print(f'*** Setting brain R2 threshold to {thresh} ***\n')
             params['brainR2'] = thresh
 
-        if 'pcR2cutoff' not in params:
+        if 'pcR2cutoff' not in params or not params['pcR2cutoff']:
             params['pcR2cutoff'] = thresh
 
         # FIT TYPE-B MODEL [FITHRF]
@@ -658,7 +671,7 @@ class glm_estimatesingletrial():
         else:
 
             # define
-            whmodel = 2
+            whmodel = 1
 
             # initialize
             FitHRFR2 = np.zeros(
@@ -682,12 +695,11 @@ class glm_estimatesingletrial():
 
             # loop over chunks
             print('*** FITTING TYPE-B MODEL (FITHRF) ***\n')
-            for z in np.arange(len(chunks)):
+            for z in tqdm(np.arange(len(chunks)), desc='chunks'):
 
                 this_chunk = chunks[z]
                 n_inchunk = len(this_chunk)
 
-                print(f'working on chunk {z+1} of {len(chunks)}.\n')
                 data_chunk = [datx[this_chunk, :] for datx in self.data]
                 # do the fitting and accumulate all the betas
                 modelmd0 = np.zeros(
@@ -695,7 +707,6 @@ class glm_estimatesingletrial():
                     dtype=np.float32)
                 # someXYZ x trialbetas x HRFs
                 for p in np.arange(nh):
-                    print(f'\t working on hrf {p}')
                     results0 = glm_estimatemodel(
                         designSINGLE,
                         data_chunk,
@@ -762,8 +773,7 @@ class glm_estimatesingletrial():
                     '*** FITTING TYPE-B MODEL'
                     '(FITHRF but with LSS estimation) ***\n')
 
-                for z in np.arange(len(chunks)):
-                    print(f'working on chunk {z+1} of {len(chunks)}.\n')
+                for z in tqdm(np.arange(len(chunks)), desc='chunks'):
 
                     this_chunk = chunks[z]
                     n_inchunk = len(this_chunk)
@@ -797,7 +807,8 @@ class glm_estimatesingletrial():
                         # do the GLM
                         cnt = 0
                         for rrr in np.arange(len(designSINGLE)):  # each run
-                            for ccc in np.arange(numtrialrun[rrr]):  # each trial
+                            for ccc in np.arange(numtrialrun[rrr]):
+                                # each trial
                                 designtemp = designSINGLE[rrr]
                                 designtemp = np.c_[
                                     designtemp[:, cnt+ccc],
@@ -830,17 +841,18 @@ class glm_estimatesingletrial():
             # save to disk if desired
             if params['wantfileoutputs'][whmodel] == 1:
                 file0 = os.path.join(outputdir, 'TYPEB_FITHRF.npy')
-                print(f'*** Saving results to {file0}. ***\n')
+                print(f'\n*** Saving results to {file0}. ***\n')
                 np.save(
                     file0,
-                    FitHRFR2,
-                    FitHRFR2run,
-                    HRFindex,
-                    HRFindexrun,
-                    R2,
-                    R2run,
-                    modelmd,
-                    meanvol
+                    {'FitHRFR2': FitHRFR2,
+                     'FitHRFR2run': FitHRFR2run,
+                     'HRFindex': HRFindex,
+                     'HRFindexrun': HRFindexrun,
+                     'R2': R2,
+                     'R2run': R2run,
+                     'betasmd': modelmd,
+                     'meanvol':  meanvol
+                     }
                 )
 
             # figures?
@@ -852,20 +864,23 @@ class glm_estimatesingletrial():
                     make_image_stack(HRFindex.reshape(xyz)),
                     vmin=0,
                     vmax=nh)
+                ax = plt.gca()
+                ax.axes.xaxis.set_ticklabels([])
+                ax.axes.yaxis.set_ticklabels([])
                 plt.colorbar()
                 plt.savefig(os.path.join(outputdir, 'HRFindex.png'))
                 plt.close('all')
 
             # preserve in memory if desired, and then clean up
             if params['wantmemoryoutputs'][whmodel] == 1:
-                results['lss'] = {
+                results['typeb'] = {
                     'FitHRFR2': FitHRFR2,
                     'FitHRFR2run': FitHRFR2run,
                     'HRFindex': HRFindex,
                     'HRFindexrun': HRFindexrun,
                     'R2': R2,
                     'R2run': R2run,
-                    'modelmd': modelmd,
+                    'betasmd': modelmd,
                     'meanvol': meanvol
                 }
 
@@ -885,7 +900,7 @@ class glm_estimatesingletrial():
 
             # threshold for non-brain voxels
             thresh = np.percentile(
-                meanvol.flaten(),
+                meanvol.flatten(),
                 params['brainthresh'][0]
             )*params['brainthresh'][1]
 
@@ -896,33 +911,540 @@ class glm_estimatesingletrial():
             badR2 = onoffR2 < params['brainR2']
 
             # logical indicating voxels that satisfy all criteria
-            noisepool = bright and badR2 and not params['brainexclude']
+            if not params['brainexclude']:
+                noisepool = (bright * badR2)
+            else:
+                noisepool = (bright * badR2 * params['brainexclude'])
 
             # determine noise regressors
             pcregressors = []
             print('*** DETERMINING GLMDENOISE REGRESSORS ***\n')
             polymatrix = []
-            for p, run in enumerate(self.data):
+            for run_i, drun in enumerate(self.data):
                 # extract the time-series data for the noise pool
-                noise_pool = np.transpose(run)[:, noisepool]
+                noise_pool = np.transpose(drun)[:, noisepool]
 
                 # project out polynomials from the data
                 # this projects out polynomials
                 pmatrix = make_polynomial_matrix(
-                    numtimepoints[p],
-                    params['maxpolydeg'][p])
+                    numtimepoints[run_i],
+                    params['maxpolydeg'][run_i])
 
                 polymatrix.append(
                     make_projection_matrix(pmatrix))
 
-                noise_pool = polymatrix.astype(np.float32) @ noise_pool
+                noise_pool = polymatrix[run_i].astype(np.float32) @ noise_pool
 
                 noise_pool = normalize(noise_pool, axis=0)
 
                 noise_pool = noise_pool @ noise_pool.T
                 u = np.linalg.svd(noise_pool)[0]
-                u = u[:, :params['numpctotry']+1]
+                u = u[:, :params['n_pcs']+1]
                 u = u / np.std(u, 0)
                 pcregressors.append(u.astype(np.float32))
 
         # CROSS-VALIDATE TO FIGURE OUT NUMBER OF GLMDENOISE REGRESSORS
+        # if the user does not want GLMdenoise, just set some dummy values
+        if params['wantglmdenoise'] == 0:
+            pcnum = 0
+            xvaltrend = None
+            glmbadness = None
+            pcvoxels = None
+
+        # in this case, the user decides (and we can skip the cross-validation)
+        elif params['pcstop'] <= 0:
+            pcnum = -params['pcstop']
+            xvaltrend = None
+            glmbadness = None
+            pcvoxels = None
+
+        # otherwise, we have to do a lot of work
+        else:
+
+            # initialize
+            # XYZ x 1+npc  [squared beta error for different numbers of PCs]
+            glmbadness = np.zeros(
+                (numvoxels, 1+params['n_pcs']),
+                dtype=np.float32
+            )
+
+            # loop over chunks
+            print('*** CROSS-VALIDATING DIFFERENT NUMBERS OF REGRESSORS ***\n')
+            for z in tqdm(np.arange(len(chunks)), desc='chunks'):
+
+                this_chunk = chunks[z]
+                n_inchunk = len(this_chunk)
+
+                # loop over possible HRFs
+                for hh in np.arange(nh):
+                    # figure out which voxels to process.
+                    # this will be a vector of indices into the small
+                    # chunk that we are processing.
+                    # our goal is to fully process this set of voxels!
+                    goodix = np.flatnonzero(
+                        HRFindex[this_chunk] == hh)
+
+                    data0 = \
+                        [x[this_chunk, :][goodix, :] for x in self.data]
+
+                    # calculate the corresponding indices relative to the
+                    # full volume
+                    temp = np.zeros(HRFindex.shape)
+                    temp[this_chunk] = 1
+                    relix = np.flatnonzero(temp)[goodix]
+
+                    # perform GLMdenoise
+                    results0 = []
+                    for n_pc in range(params['n_pcs']+1):
+
+                        # define options
+                        optA = {
+                            'maxpolydeg': params['maxpolydeg'],
+                            'wantpercentbold': 0,
+                            'suppressoutput': 1,
+                            'extra_regressors': [None for r in range(numruns)]
+                        }
+                        if n_pc > 0:
+                            for rr in range(numruns):
+                                if not params['extra_regressors'] or \
+                                     not params['extra_regressors'][rr]:
+
+                                    optA['extra_regressors'][rr] = \
+                                        pcregressors[rr][:, :n_pc]
+                                else:
+                                    optA['extra_regressors'][rr] = \
+                                        np.c_[params['extra_regressors'][rr],
+                                              pcregressors[rr][:, :n_pc]]
+
+                        # do the GLM
+                        temp, cache = glm_estimatemodel(
+                                    designSINGLE,
+                                    data0,
+                                    stimdur,
+                                    tr,
+                                    'assume',
+                                    params['hrflibrary'][:, hh],
+                                    0,
+                                    optA
+                                )
+
+                        results0.append(temp['betasmd'])
+                    glmbadness[relix, :] = calcbadness(
+                        params['xvalscheme'],
+                        validcolumns,
+                        stimix,
+                        results0,
+                        params['sessionindicator']
+                        )  # voxels x regularization levels
+        # compute xvaltrend
+        ix = np.flatnonzero(
+            (onoffR2.flatten() > params['pcR2cutoff']) * (np.asarray(
+                params['pcR2cutoffmask']).flatten()))  # vector of indices
+
+        if ix.size == 0:
+            print(
+                'Warning: no voxels passed the pcR2cutoff'
+                'and pcR2cutoffmask criteria. Using the'
+                'best 100 voxels.\n')
+            if params['pcR2cutoffmask'] == 1:
+                ix2 = np.flatnonzero(np.ones(onoffR2.shape))
+            else:
+                ix2 = np.flatnonzero(params['pcR2cutoffmask'] == 1)
+
+            np.testing.assert_equal(
+                len(ix2) > 0, True, err_msg='no voxels are in pcR2cutoffmask')
+
+            ix3 = np.argsort(onoffR2[ix2])[::-1]
+            num = np.min([100, len(ix2)])
+            ix = ix2[ix3[range(num)]]
+
+        # NOTE: sign flip so that high is good
+        xvaltrend = -np.median(glmbadness[ix, :], axis=0)
+        np.testing.assert_equal(np.all(np.isfinite(xvaltrend)), True)
+
+        # create for safe-keeping
+        pcvoxels = np.zeros((nx*ny*nz), dtype=bool)
+        pcvoxels[ix] = 1
+
+        # choose number of PCs
+        # this is the performance curve that starts
+        # at 0 (corresponding to 0 PCs)
+        pcnum = select_noise_regressors(xvaltrend, params['pcstop'])
+
+        # deal with dimensions
+        # NOTE skip for now
+        # glmbadness = np.reshape(glmbadness, [nx, ny, nz, -1])
+
+        # FIT TYPE-C + TYPE-D MODELS [FITHRF_GLMDENOISE, FITHRF_GLMDENOISE_RR]
+
+        # setup
+        todo = []
+        if params['wantglmdenoise'] and (
+             params['wantfileoutputs'][2] or params['wantmemoryoutputs'][2]):
+            todo.append(2)  # the user wants the type-C model returned
+
+        if params['wantfracridge'] and (
+             params['wantfileoutputs'][3] or params['wantmemoryoutputs'][3]):
+            todo.append(3)  # the user wants the type-D model returned
+
+        for whmodel in todo:
+            # we need to do some tricky setup
+            # if this is just a GLMdenoise case, we need to fake it
+            if whmodel == 2:
+                # here, we need to fake this in order to get the outputs
+                fracstouse = np.array([1])
+                fractoselectix = 0
+                autoscaletouse = 0  # not necessary, so turn off
+
+            # if this is a fracridge case
+            if whmodel == 3:
+                # if the user specified only one fraction
+                if len(params['fracs']) == 1:
+
+                    # if the first one is 1, this is easy
+                    if params['fracs'][0] == 1:
+                        fracstouse = np.array([1])
+                        fractoselectix = 0
+                        autoscaletouse = 0  # not necessary, so turn off
+
+                    # if the first one is not 1, we might need 1
+                    else:
+                        fracstouse = np.r_[1, params['fracs']]
+                        fractoselectix = 1
+                        autoscaletouse = params['wantautoscale']
+
+                # otherwise, we have to do costly cross-validation
+                else:
+
+                    # set these
+                    fractoselectix = None
+                    autoscaletouse = params['wantautoscale']
+
+                    # if the first one is 1, this is easy
+                    if params['fracs'][0] == 1:
+                        fracstouse = params['fracs']
+
+                    # if the first one is not 1, we might need 1
+                    else:
+                        fracstouse = np.r_[1, params['fracs']]
+
+            # ok, proceed
+
+            # initialize
+            # XYZ x trialbetas  [the final beta estimates]
+            modelmd = np.zeros((nx*ny*nz, numtrials), dtype=np.float32)
+            # XYZ [the R2 for the specific optimal frac]
+            R2 = np.zeros(nx*ny*nz, dtype=np.float32)
+
+            # XYZ x runs [the R2 separated by runs for the optimal frac]
+            R2run = np.zeros((nx*ny*nz, numruns), dtype=np.float32)
+
+            # XYZ [best fraction]
+            FRACvalue = np.zeros(nx*ny*nz, dtype=np.float32)
+
+            if fractoselectix is None:
+                # XYZ [rr cross-validation performance]
+                rrbadness = np.zeros(
+                    (nx*ny*nz, len(params['fracs'])),
+                    dtype=np.float32)
+            else:
+                rrbadness = []
+
+            # XYZ x 2 [scale and offset]
+            scaleoffset = np.zeros((nx*ny*nz, 2), dtype=np.float32)
+
+            # loop over chunks
+            if whmodel == 2:
+                print('\n*** FITTING TYPE-C MODEL (GLMDENOISE) ***\n')
+            else:
+                print('*** FITTING TYPE-D MODEL (GLMDENOISE_RR) ***\n')
+
+            for z in tqdm(np.arange(len(chunks)), desc='chunks'):
+
+                this_chunk = chunks[z]
+                n_inchunk = len(this_chunk)
+
+                # loop over possible HRFs
+                for hh in np.arange(nh):
+                    # figure out which voxels to process.
+                    # this will be a vector of indices into the small
+                    # chunk that we are processing.
+                    # our goal is to fully process this set of voxels!
+                    goodix = np.flatnonzero(
+                        HRFindex[this_chunk] == hh)
+
+                    data0 = \
+                        [x[this_chunk, :][goodix, :] for x in self.data]
+
+                    # calculate the corresponding indices relative to the
+                    # full volume
+                    temp = np.zeros(HRFindex.shape)
+                    temp[this_chunk] = 1
+                    relix = np.flatnonzero(temp)[goodix]
+
+                    # process each frac
+                    results0 = []
+                    r20 = []
+                    r2run0 = []
+                    for fracl in range(len(fracstouse)):
+
+                        # define options
+                        optA = {'wantfracridge': 1,
+                                'maxpolydeg': params['maxpolydeg'],
+                                'wantpercentbold': 0,
+                                'suppressoutput': 1,
+                                'frac': fracstouse[fracl],
+                                'extra_regressors': [
+                                    None for r in range(numruns)]
+                                }
+
+                        if pcnum > 0:
+                            for run_i in range(numruns):
+                                if not params['extra_regressors'] or \
+                                     not params['extra_regressors'][run_i]:
+
+                                    optA['extra_regressors'][run_i] = \
+                                        pcregressors[run_i][:, :pcnum]
+                                else:
+                                    optA['extra_regressors'][run_i] = \
+                                        np.c_[
+                                            params['extra_regressors'][run_i],
+                                            pcregressors[run_i][:, :n_pc]]
+
+                        # fit the entire dataset using the specific frac
+                        temp, cache = glm_estimatemodel(
+                                    designSINGLE,
+                                    data0,
+                                    stimdur,
+                                    tr,
+                                    'assume',
+                                    params['hrflibrary'][:, hh],
+                                    0,
+                                    optA
+                                )
+
+                        # save some memory
+                        results0.append(temp['betasmd'])
+                        r20.append(temp['R2'])
+                        r2run0.append(temp['R2run'])
+
+                    # perform cross-validation if necessary
+                    if fractoselectix is None:
+
+                        # compute the cross-validation performance values
+                        rrbadness0 = calcbadness(
+                            params['xvalscheme'],
+                            validcolumns,
+                            stimix,
+                            results0,
+                            params['sessionindicator'])
+
+                        # this is the weird special case where we have
+                        # to ignore the artificially added 1
+                        if params['fracs'][0] != 1:
+                            FRACindex0 = np.argmin(rrbadness0[:, 1:], axis=1)
+                            FRACindex0 = FRACindex0 + 1
+                            rrbadness[relix, :] = rrbadness0[:, 1:]
+                        else:
+                            # pick best frac (FRACindex0 is V x 1 with the
+                            # index of the best frac)
+                            FRACindex0 = np.argmin(rrbadness0, axis=1)
+                            rrbadness[relix, :] = rrbadness0
+
+                    # if we already know fractoselectix, skip the
+                    # cross-validation
+                    else:
+                        FRACindex0 = fractoselectix*np.ones(
+                            len(relix),
+                            dtype=int)
+
+                    # prepare output
+                    # Author: Kendrick Kay
+
+                    FRACvalue[relix] = fracstouse[
+                        np.unravel_index(FRACindex0, fracstouse.shape)[0]]
+                    for fracl in range(len(fracstouse)):
+                        # print(f'model: {whmodel}, frac: {fracl}')
+                        # indices of voxels that chose the fraclth frac
+                        ii = np.flatnonzero(FRACindex0 == fracl)
+
+                        # scale and offset to match the unregularized result
+                        if autoscaletouse:
+                            for vv in ii:
+                                X = np.c_[
+                                    results0[fracl][vv, :],
+                                    np.ones(numtrials)].astype(np.float32)
+                                # Notice the 0
+                                h = olsmatrix(X) @ results0[0][vv, :].T
+                                if h[0] < 0:
+                                    h = np.asarray([1, 0])
+
+                                scaleoffset[relix[vv], :] = h
+                                modelmd[relix[vv], :] = X @ h
+
+                        else:
+                            scaleoffset = np.array([])
+                            modelmd[relix[ii], :] = results0[fracl][ii, :]
+                        R2[relix[ii]] = r20[fracl][ii]
+                        R2run[relix[ii], :] = np.stack(r2run0[fracl])[:, ii].T
+
+            # deal with dimensions
+            modelmd = (modelmd / np.abs(meanvol)[:, np.newaxis]) * 100
+            modelmd = np.reshape(modelmd, [nx, ny, nz, numtrials])
+            R2 = np.reshape(R2, [nx, ny, nz])
+            R2run = np.reshape(R2run, [nx, ny, nz, numruns])
+            if scaleoffset.size > 0:
+                scaleoffset = np.reshape(scaleoffset, [nx, ny, nz, 2])
+
+            if fractoselectix is None:
+                rrbadness = np.reshape(rrbadness, [nx, ny, nz, -1])
+
+            # save to disk if desired
+            if whmodel == 2:
+                file0 = os.path.join(
+                    outputdir, 'TYPEC_FITHRF_GLMDENOISE.npy')
+                outdict = {
+                    'HRFindex': HRFindex,
+                    'HRFindexrun': HRFindexrun,
+                    'glmbadness': glmbadness,
+                    'pcvoxels': pcvoxels,
+                    'pcnum': pcnum,
+                    'xvaltrend': xvaltrend,
+                    'noisepool': noisepool,
+                    'pcregressors': pcregressors,
+                    'betasmd': modelmd,
+                    'R2': R2,
+                    'R2run': R2run,
+                    'meanvol':  meanvol
+                    }
+            elif whmodel == 3:
+                file0 = os.path.join(
+                    outputdir, 'TYPED_FITHRF_GLMDENOISE_RR.npy')
+                outdict = {
+                    'HRFindex': HRFindex,
+                    'HRFindexrun': HRFindexrun,
+                    'glmbadness': glmbadness,
+                    'pcvoxels': pcvoxels,
+                    'pcnum': pcnum,
+                    'xvaltrend': xvaltrend,
+                    'noisepool': noisepool,
+                    'pcregressors': pcregressors,
+                    'betasmd': modelmd,
+                    'R2': R2,
+                    'R2run': R2run,
+                    'rrbadness': rrbadness,
+                    'FRACvalue': FRACvalue,
+                    'scaleoffset': scaleoffset,
+                    'meanvol':  meanvol
+                    }
+
+            if params['wantfileoutputs'][whmodel] == 1:
+                print(f'\n*** Saving results to {file0}. ***\n')
+                np.save(file0, outdict)
+
+            # figures?
+            if wantfig:
+                if whmodel == 2:
+                    plt.imshow(
+                        make_image_stack(noisepool.reshape(xyz)),
+                        vmin=0,
+                        vmax=1,
+                        cmap='gray'
+                    )
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_ticklabels([])
+                    ax.axes.yaxis.set_ticklabels([])
+                    plt.colorbar()
+                    plt.savefig(os.path.join(outputdir, 'noisepool.png'))
+                    plt.close('all')
+                    plt.imshow(
+                        make_image_stack(pcvoxels.reshape(xyz)),
+                        vmin=0,
+                        vmax=1,
+                        cmap='gray'
+                    )
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_ticklabels([])
+                    ax.axes.yaxis.set_ticklabels([])
+                    plt.colorbar()
+                    plt.savefig(os.path.join(outputdir, 'pcvoxels.png'))
+                    plt.close('all')
+
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1, 1, 1)
+                    ax.plot(range(params['n_pcs']+1), xvaltrend)
+                    ax.scatter(pcnum, xvaltrend[pcnum])
+                    ax.set(
+                        xlabel='# GLMdenoise regressors',
+                        ylabel='Cross-val performance (higher is better)')
+                    plt.savefig(os.path.join(outputdir, 'xvaltrend.png'))
+                    plt.close('all')
+
+                if whmodel == 3:
+                    plt.imshow(
+                        make_image_stack(R2),
+                        vmin=0,
+                        vmax=100,
+                        cmap='hot'
+                    )
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_ticklabels([])
+                    ax.axes.yaxis.set_ticklabels([])
+                    plt.colorbar()
+                    plt.savefig(os.path.join(outputdir, 'typeD_R2.png'))
+                    plt.close('all')
+                    plt.imshow(
+                        make_image_stack(FRACvalue.reshape(xyz)),
+                        vmin=0,
+                        vmax=1,
+                        cmap='copper'
+                    )
+                    ax = plt.gca()
+                    ax.axes.xaxis.set_ticklabels([])
+                    ax.axes.yaxis.set_ticklabels([])
+                    plt.colorbar()
+                    plt.savefig(os.path.join(outputdir, 'FRACvalue.png'))
+
+            # preserve in memory if desired
+            if params['wantmemoryoutputs'][whmodel] == 1:
+                if whmodel == 2:
+                    results['typec'] = {
+                        'HRFindex': HRFindex,
+                        'HRFindexrun': HRFindexrun,
+                        'glmbadness': glmbadness,
+                        'pcvoxels': pcvoxels,
+                        'pcnum': pcnum,
+                        'xvaltrend': xvaltrend,
+                        'noisepool': noisepool,
+                        'pcregressors': pcregressors,
+                        'betasmd': modelmd,
+                        'R2': R2,
+                        'R2run': R2run,
+                        'meanvol':  meanvol
+                     }
+                elif whmodel == 3:
+                    results['typed'] = {
+                        'HRFindex': HRFindex,
+                        'HRFindexrun': HRFindexrun,
+                        'glmbadness': glmbadness,
+                        'pcvoxels': pcvoxels,
+                        'pcnum': pcnum,
+                        'xvaltrend': xvaltrend,
+                        'noisepool': noisepool,
+                        'pcregressors': pcregressors,
+                        'betasmd': modelmd,
+                        'R2': R2,
+                        'R2run': R2run,
+                        'rrbadness': rrbadness,
+                        'FRACvalue': FRACvalue,
+                        'scaleoffset': scaleoffset,
+                        'meanvol':  meanvol
+                     }
+
+        print('*** All model types done ***\n')
+        if not results:
+            print('*** nothing selected to return ***\n')
+        else:
+            print('*** return model types in results ***\n')
+
+        return results

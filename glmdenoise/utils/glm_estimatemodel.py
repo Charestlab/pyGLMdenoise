@@ -121,7 +121,7 @@ def glm_estimatemodel(design, data, stimdur, tr, hrfmodel, hrfknobs,
 
     is time x regressors or a cell vector
     of elements that are each time x regressors.  The dimensions of
-    <extraregressors> should mirror that of <design> (i.e. same number of
+    <extra_regressors> should mirror that of <design> (i.e. same number of
     runs, same number of time points).  The number of extra regressors
     does not have to be the same across runs, and each run can have zero
     or more extra regressors.  If None or not supplied, we do
@@ -510,7 +510,6 @@ def glm_estimatemodel(design, data, stimdur, tr, hrfmodel, hrfknobs,
 
     # construct projection matrices for the nuisance components
     polymatrix = []
-    exmatrix = []
     combinedmatrix = []
     for p in range(numruns):
 
@@ -521,24 +520,19 @@ def glm_estimatemodel(design, data, stimdur, tr, hrfmodel, hrfknobs,
         polymatrix.append(
             make_projection_matrix(pmatrix))
 
-        # this projects out the extra regressors
-        if not opt['extra_regressors'][p]:
-            exmatrix.append(1)
-        else:
-            exmatrix.append(
-                make_projection_matrix(
-                    opt['extra_regressors'][p]))
+        extra_regressors = opt['extra_regressors'][p]
 
         # this projects out both of them
-        if not opt['extra_regressors'][p]:
-            combinedmatrix.append(
-                make_projection_matrix(pmatrix))
+        if extra_regressors is not None:
+            if extra_regressors.any():
+                combinedmatrix.append(
+                    make_projection_matrix(
+                        np.c_[pmatrix, extra_regressors]
+                    )
+                )
         else:
             combinedmatrix.append(
-                make_projection_matrix(
-                    np.c_[pmatrix, opt['extra_regressors'][p]]
-                )
-            )
+                make_projection_matrix(pmatrix))
 
     # project out nuisance components from the data.
     # after this step, data will have polynomials removed,
@@ -737,12 +731,12 @@ def glm_estimatemodel(design, data, stimdur, tr, hrfmodel, hrfknobs,
             # deal with {2}
             if results['betas'].ndim == 2:
                 # XYZ by n_conditions
-                results['betasmd'] = results['betas']
+                results['betasmd'] = results['betas'].astype(np.float32)
                 results['betasse'] = np.zeros(
                     results['betas'].shape).astype(np.float32)
             else:
                 # XYZ by boot by n_conditions
-                results['betasmd'] = np.median(results['betas'], 1)
+                results['betasmd'] = np.median(results['betas'], 1).astype(np.float32)
                 temp = np.percentile(results['betas'], [16, 50, 84], 1)
                 results['betasse'] = (temp[2, :, :] - temp[0, :, :])/2
 

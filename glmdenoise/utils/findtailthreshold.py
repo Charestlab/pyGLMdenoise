@@ -86,5 +86,6 @@ def findtailthreshold(v, figpath=None):
         plt.plot([allvals[ix], allvals[ix]], plt.ylim(), 'k-', linewidth=2)
         plt.title('Posterior Probabilities')
         plt.savefig(figpath)
+        plt.close('all')
 
     return f, mns, sds, gmfit

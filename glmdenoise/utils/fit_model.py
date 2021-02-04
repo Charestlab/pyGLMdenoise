@@ -100,7 +100,7 @@ def fit_model(design, data2, tr, hrfmodel, hrfknobs,
             f = fracridge(
                 np.concatenate(desw),
                 np.concatenate(data2),
-                opt['fracs']
+                opt['frac'],
             )[0]
 
         else:
@@ -112,7 +112,7 @@ def fit_model(design, data2, tr, hrfmodel, hrfknobs,
         f = np.transpose(np.reshape(f, [hrfknobs+1, numconditions]), [2, 1, 0])
 
         fout = {}
-        fout['betas'] = f.T
+        fout['betas'] = f.T.astype(np.float32)
         fout['hrffitvoxels'] = hrffitvoxels
 
     elif hrfmodel == 'assume':
@@ -145,12 +145,11 @@ def fit_model(design, data2, tr, hrfmodel, hrfknobs,
 
         # fit model
         if opt['wantfracridge']:
-            f = np.transpose(
-                fracridge(
+            f = fracridge(
                     np.concatenate(desw),
                     np.concatenate(data2),
-                    opt['fracs'])[0],
-                [0, 2, 1])  # conditions x voxels
+                    opt['frac'])[0]
+            # conditions x voxels
         else:
             f = mtimes_stack(
                 olsmatrix(np.concatenate(desw)),
@@ -158,7 +157,7 @@ def fit_model(design, data2, tr, hrfmodel, hrfknobs,
 
         fout = {}
         fout['hrfknobs'] = hrfknobs
-        fout['betas'] = f.T
+        fout['betas'] = f.T.astype(np.float32)
         fout['hrffitvoxels'] = hrffitvoxels
 
     elif hrfmodel == 'optimize':

@@ -5,6 +5,7 @@ import nibabel as nib
 import pandas as pd
 from glmdenoise.utils.make_design_matrix import make_design
 from glmdenoise.single_trial import glm_estimatesingletrial
+import time
 
 sub = 2
 ses = 1
@@ -75,14 +76,22 @@ for i, (run, eventf) in enumerate(zip(runs, eventfs)):
         )
     data.append(y)
 
-opt = {'wantlss': 1}
+opt = {'wantlss': 0}
 outputdir = 'GLMestimatesingletrialoutputs'
 
+start_time = time.time()
 gst = glm_estimatesingletrial(opt)
 
-gst.fit(
+results = gst.fit(
     design,
     data,
     stimdur,
     tr,
     outputdir=outputdir)
+
+
+elapsed_time = time.time() - start_time
+print(
+    'elapsedtime: ',
+    f'{time.strftime("%H:%M:%S", time.gmtime(elapsed_time))}'
+)
