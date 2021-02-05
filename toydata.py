@@ -17,5 +17,5 @@ data = [
     rng.rand(4, 5)
 ]
 
-gd = GLMdenoise(params={'hrfmodel':'assume'})
+gd = GLMdenoise(params={'hrfmodel': 'assume'})
 gd.fit(design, data, 1.0)
