@@ -2,6 +2,22 @@ import numpy as np
 
 
 def check_inputs(data, design):
+    """
+    check that the data and design meet the required
+    specifications for glm single trial estimates.
+
+    Arguments
+    _________
+
+        data (list): could be x,y,z,t or XYZ,t
+        design (list of runs or single run): design matrix
+
+    Returns:
+    ________
+
+        data (list): flattened XYZ data format
+        design (list): design matrix with a list entry per run
+    """
     # massage <design> and sanity-check it
     if type(design) is not list:
         design = [design]
@@ -53,5 +69,22 @@ def check_inputs(data, design):
             # force to XYZ x T for convenience
     else:
         xyz = False
+
+    # check number of time points and truncate if necessary
+    for run_i in np.arange(len(data)):
+        if data[run_i].shape[1] > design[run_i].shape[0]:
+            print(
+                f'WARNING: run {run_i} has more time points'
+                'in <data> than <design>. We are truncating'
+                '<data>.\n')
+            data[run_i] = data[run_i][:, np.arange(
+                design.shape[0])]
+
+        if data[run_i].shape[1] < design[run_i].shape[0]:
+            print(
+                f'WARNING: run {run_i} has more time points in <design>'
+                'than <data>. We are truncating <design>.\n')
+            design[run_i] = design[run_i][np.arange(
+                data[run_i].shape[0]), :]
 
     return data, design, xyz

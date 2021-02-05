@@ -3,8 +3,8 @@ import glob
 import numpy as np
 import nibabel as nib
 import pandas as pd
-from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.single_trial import glm_estimatesingletrial
+from glmdenoise.design.make_design_matrix import make_design
+from glmdenoise.single_trial import GLM_singletrial
 import time
 
 sub = 2
@@ -80,7 +80,7 @@ opt = {'wantlss': 0}
 outputdir = 'GLMestimatesingletrialoutputs'
 
 start_time = time.time()
-gst = glm_estimatesingletrial(opt)
+gst = GLM_singletrial(opt)
 
 results = gst.fit(
     design,

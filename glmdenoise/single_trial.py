@@ -1,28 +1,29 @@
+from __future__ import absolute_import, division, print_function
 import os
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
-from glmdenoise.defaults import default_params
+from sklearn.preprocessing import normalize
 from glmdenoise.check_inputs import check_inputs
-from glmdenoise.utils.normalisemax import normalisemax
-from glmdenoise.utils.gethrf import getcanonicalhrf, getcanonicalhrflibrary
+from glmdenoise.defaults import default_params
+from glmdenoise.gmm.findtailthreshold import findtailthreshold
+from glmdenoise.hrf.gethrf import getcanonicalhrf, getcanonicalhrflibrary
+from glmdenoise.hrf.normalisemax import normalisemax
+from glmdenoise.ols.glm_estimatemodel import glm_estimatemodel
+from glmdenoise.ols.make_poly_matrix import (make_polynomial_matrix,
+                                             make_projection_matrix)
+from glmdenoise.ols.olsmatrix import olsmatrix
+from glmdenoise.utils.select_noise_regressors import select_noise_regressors
+from glmdenoise.ssq.calcbadness import calcbadness
 from glmdenoise.utils.chunking import chunking
 from glmdenoise.utils.make_image_stack import make_image_stack
-from glmdenoise.utils.findtailthreshold import findtailthreshold
-from glmdenoise.utils.glm_estimatemodel import glm_estimatemodel
-from glmdenoise.utils.make_poly_matrix import (make_polynomial_matrix,
-                                               make_projection_matrix)
-from glmdenoise.utils.calcbadness import calcbadness
-from glmdenoise.utils.olsmatrix import olsmatrix
-from glmdenoise.select_noise_regressors import select_noise_regressors
-from sklearn.preprocessing import normalize
-from tqdm import tqdm
-from ipdb import set_trace
 
 
+__all__ = ["GLM_singletrial"]
 dir0 = os.path.dirname(os.path.realpath(__file__))
 
 
-class glm_estimatesingletrial():
+class GLM_singletrial():
 
     def __init__(self, params=None):
         """glm singletrial denoise constructor
@@ -61,7 +62,7 @@ class glm_estimatesingletrial():
             of OLS. Other model types, if computed, use OLS.
 
         Note that if you set wantglmdenoise=1, you MUST have repeats of
-        conditions andan associated cross-validation scheme (<params.xvalscheme>),
+        conditions andan associated cross-validation scheme <params.xvalscheme>
         UNLESS you specify params.pcstop = -B. In other words, you can perform
         wantglmdenoise without any cross-validation, but you need to provide
         params.pcstop = -B.
@@ -260,12 +261,6 @@ class glm_estimatesingletrial():
             params[key] = params.get(key) or default_params[key]
 
         self.params = params
-        self.extra_regressors = params['extra_regressors']
-        self.n_pcs = params['n_pcs']
-        self.n_jobs = params['n_jobs']
-        self.n_boots = params['n_boots']
-        self.hrfparams = {}
-        self.results = dict()
 
     def fit(self, design, data, stimdur, tr, outputdir=None):
         """
@@ -393,23 +388,6 @@ class glm_estimatesingletrial():
             numvoxels = np.prod(xyz)
         else:
             numvoxels = self.data[0].shape[0]
-
-        # check number of time points and truncate if necessary
-        for run_i in np.arange(len(data)):
-            if self.data[run_i].shape[1] > self.design[run_i].shape[0]:
-                print(
-                    f'WARNING: run {run_i} has more time points'
-                    'in <data> than <design>. We are truncating'
-                    '<data>.\n')
-                self.data[run_i] = self.data[run_i][:, np.arange(
-                    self.design.shape[0])]
-
-            if self.data[run_i].shape[1] < self.design[run_i].shape[0]:
-                print(
-                    f'WARNING: run {run_i} has more time points in <design>'
-                    'than <data>. We are truncating <design>.\n')
-                self.design[run_i] = self.design[run_i][np.arange(
-                    self.data[run_i].shape[0]), :]
 
         # inputs
         if 'xvalscheme' not in params:

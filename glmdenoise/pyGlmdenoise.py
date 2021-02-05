@@ -5,21 +5,22 @@ from tqdm import tqdm
 import warnings
 from joblib import Parallel, delayed
 from sklearn.preprocessing import normalize
-from glmdenoise.utils.make_design_matrix import make_design
-from glmdenoise.utils.calc_cod import (calc_cod,
-                                       calc_cod_stack)
-from glmdenoise.utils.optimise_hrf import optimise_hrf
-
-from glmdenoise.select_noise_regressors import select_noise_regressors
-from glmdenoise.utils.normalisemax import normalisemax
-from glmdenoise.utils.gethrf import getcanonicalhrf
-from glmdenoise.report import Report
+from glmdenoise.cod.calc_cod import (calc_cod,
+                                     calc_cod_stack)
 from glmdenoise.defaults import default_params
-from glmdenoise.whiten_data import whiten_data, construct_projection_matrix
-from glmdenoise.fit_runs import fit_runs
-from glmdenoise.cross_validate import cross_validate
-from glmdenoise.utils.make_poly_matrix import (make_polynomial_matrix,
-                                               make_projection_matrix)
+from glmdenoise.design.make_design_matrix import make_design
+from glmdenoise.hrf.normalisemax import normalisemax
+from glmdenoise.hrf.gethrf import getcanonicalhrf
+from glmdenoise.ols.optimise_hrf import optimise_hrf
+from glmdenoise.ols.cross_validate import cross_validate
+from glmdenoise.ols.fit_runs import fit_runs
+from glmdenoise.ols.make_poly_matrix import (make_polynomial_matrix,
+                                             make_projection_matrix)
+from glmdenoise.ols.whiten_data import whiten_data, construct_projection_matrix
+from glmdenoise.report import Report
+from glmdenoise.utils.select_noise_regressors import select_noise_regressors
+
+
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
